@@ -1,0 +1,60 @@
+CREATE TABLE lottery_draws (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    lottery_type VARCHAR(16) NOT NULL COMMENT '彩票类型编码，MVP 固定为 DLT',
+    issue_no VARCHAR(32) NOT NULL COMMENT '开奖期号',
+    draw_date DATE NOT NULL COMMENT '开奖日期',
+    front_numbers VARCHAR(32) NOT NULL COMMENT '前区号码，升序逗号分隔，如 15,20,27,28,35',
+    back_numbers VARCHAR(16) NOT NULL COMMENT '后区号码，升序逗号分隔，如 02,11',
+    pool_balance DECIMAL(18,2) NULL COMMENT '开奖后奖池金额',
+    sales_amount DECIMAL(18,2) NULL COMMENT '本期销售金额',
+    source_url VARCHAR(512) NOT NULL COMMENT '数据来源接口地址',
+    pdf_url VARCHAR(512) NULL COMMENT '官方开奖公告 PDF 地址',
+    fetched_time DATETIME NOT NULL COMMENT '抓取时间',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_lottery_issue (lottery_type, issue_no),
+    KEY idx_lottery_draw_date (lottery_type, draw_date),
+    KEY idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='彩票开奖主表';
+
+CREATE TABLE lottery_prize_tiers (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    draw_id BIGINT NOT NULL COMMENT '开奖主表 ID，由业务代码保证关联有效',
+    lottery_type VARCHAR(16) NOT NULL COMMENT '彩票类型编码，冗余便于查询',
+    issue_no VARCHAR(32) NOT NULL COMMENT '开奖期号，冗余便于查询',
+    prize_name VARCHAR(64) NOT NULL COMMENT '奖级名称，如 一等奖、一等奖(追加)',
+    stake_count INT NOT NULL DEFAULT 0 COMMENT '中奖注数',
+    stake_amount DECIMAL(18,2) NULL COMMENT '单注奖金',
+    total_prize_amount DECIMAL(18,2) NULL COMMENT '当前奖级总奖金',
+    sort_order INT NULL COMMENT '官方返回排序值',
+    prize_group VARCHAR(32) NULL COMMENT '官方返回奖级分组编码',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_draw_prize_group (draw_id, prize_group),
+    KEY idx_lottery_issue (lottery_type, issue_no),
+    KEY idx_draw_id (draw_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='开奖奖级明细表';
+
+CREATE TABLE lottery_sync_tasks (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    task_no VARCHAR(64) NOT NULL COMMENT '任务编号',
+    lottery_type VARCHAR(16) NOT NULL COMMENT '彩票类型编码',
+    sync_type VARCHAR(32) NOT NULL COMMENT '同步类型：LATEST、ISSUE_RANGE、HISTORY_PAGE',
+    trigger_source VARCHAR(32) NOT NULL COMMENT '触发来源：ADMIN、SYSTEM',
+    status VARCHAR(32) NOT NULL COMMENT '任务状态：PENDING、RUNNING、SUCCESS、PARTIAL_SUCCESS、FAILED',
+    request_params JSON NULL COMMENT '同步请求参数 JSON',
+    success_count INT NOT NULL DEFAULT 0 COMMENT '成功数量',
+    skipped_count INT NOT NULL DEFAULT 0 COMMENT '跳过数量',
+    failed_count INT NOT NULL DEFAULT 0 COMMENT '失败数量',
+    failure_reason VARCHAR(1000) NULL COMMENT '失败原因摘要',
+    start_time DATETIME NULL COMMENT '开始时间',
+    finish_time DATETIME NULL COMMENT '结束时间',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_task_no (task_no),
+    KEY idx_lottery_sync_status (lottery_type, sync_type, status),
+    KEY idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='彩票开奖同步任务表';
