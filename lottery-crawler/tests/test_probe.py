@@ -8,16 +8,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
 sys.path.insert(0, str(SRC_ROOT))
 
-from lottery_crawler.probe import render_history_page_json
-from lottery_crawler.sporttery_parser import parse_history_page
+from lottery_crawler.cli.probe import render_history_page_json
+from lottery_crawler.sources.sporttery.parser import parse_history_page
 
 
-FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
+FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "sporttery"
 
 
 class ProbeTest(unittest.TestCase):
     def test_render_history_page_json_outputs_stable_backend_contract(self):
-        payload = (FIXTURE_DIR / "sporttery_history_page_success.json").read_text(
+        payload = (FIXTURE_DIR / "history_page_success.json").read_text(
             encoding="utf-8"
         )
         page = parse_history_page(payload)

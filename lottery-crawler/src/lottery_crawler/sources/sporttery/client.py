@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import httpx
 
-from lottery_crawler.models import HistoryPage
-from lottery_crawler.sporttery_parser import (
+from lottery_crawler.domain.models import HistoryPage
+from lottery_crawler.sources.sporttery.parser import (
     SPORTTERY_DLT_HISTORY_URL,
     SportteryParseError,
     parse_history_page,

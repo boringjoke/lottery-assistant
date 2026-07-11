@@ -9,15 +9,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
 sys.path.insert(0, str(SRC_ROOT))
 
-from lottery_crawler.sporttery_parser import SportteryParseError, parse_history_page
+from lottery_crawler.sources.sporttery.parser import SportteryParseError, parse_history_page
 
 
-FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
+FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "sporttery"
 
 
 class SportteryParserTest(unittest.TestCase):
     def test_parse_history_page_extracts_draws_and_prize_tiers(self):
-        payload = (FIXTURE_DIR / "sporttery_history_page_success.json").read_text(
+        payload = (FIXTURE_DIR / "history_page_success.json").read_text(
             encoding="utf-8"
         )
 
@@ -54,7 +54,7 @@ class SportteryParserTest(unittest.TestCase):
 
     def test_parse_history_page_rejects_invalid_number_count(self):
         payload = json.loads(
-            (FIXTURE_DIR / "sporttery_history_page_success.json").read_text(
+            (FIXTURE_DIR / "history_page_success.json").read_text(
                 encoding="utf-8"
             )
         )

@@ -4,7 +4,7 @@ import json
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from lottery_crawler.models import DrawResult, HistoryPage, PrizeTier
+from lottery_crawler.domain.models import DrawResult, HistoryPage, PrizeTier
 
 
 SPORTTERY_DLT_HISTORY_URL = (

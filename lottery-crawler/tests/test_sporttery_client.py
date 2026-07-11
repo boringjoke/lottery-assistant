@@ -9,16 +9,16 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = PROJECT_ROOT / "src"
 sys.path.insert(0, str(SRC_ROOT))
 
-from lottery_crawler.sporttery_client import SportteryClient, SportteryFetchError
+from lottery_crawler.sources.sporttery.client import SportteryClient, SportteryFetchError
 
 
-FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
+FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "sporttery"
 
 
 class SportteryClientTest(unittest.TestCase):
     def test_fetch_history_page_uses_safe_defaults_and_browser_headers(self):
         captured_requests = []
-        payload = (FIXTURE_DIR / "sporttery_history_page_success.json").read_text(
+        payload = (FIXTURE_DIR / "history_page_success.json").read_text(
             encoding="utf-8"
         )
 
