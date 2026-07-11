@@ -1,0 +1,119 @@
+{
+  "dataFrom": "",
+  "emptyFlag": false,
+  "errorCode": "0",
+  "errorMessage": "处理成功",
+  "success": true,
+  "value": {
+    "pageNo": 1,
+    "pageSize": 2,
+    "pages": 1447,
+    "total": 2894,
+    "list": [
+      {
+        "lotteryGameName": "超级大乐透",
+        "lotteryGameNum": "85",
+        "lotteryDrawNum": "26076",
+        "lotteryDrawResult": "15 20 27 28 35 02 11",
+        "lotteryDrawTime": "2026-07-08",
+        "poolBalanceAfterdraw": "804,904,836.99",
+        "totalSaleAmount": "303,115,587",
+        "drawPdfUrl": "https://pdf.sporttery.cn/33800/26076/26076.pdf",
+        "prizeLevelList": [
+          {
+            "prizeLevel": "一等奖",
+            "stakeCount": "4",
+            "stakeAmount": "10,000,000",
+            "stakeAmountFormat": "10000000",
+            "totalPrizeamount": "40,000,000",
+            "sort": 101,
+            "group": "101"
+          },
+          {
+            "prizeLevel": "一等奖(追加)",
+            "stakeCount": "0",
+            "stakeAmount": "---",
+            "stakeAmountFormat": "-1",
+            "totalPrizeamount": "0",
+            "sort": 201,
+            "group": "201"
+          },
+          {
+            "prizeLevel": "二等奖",
+            "stakeCount": "113",
+            "stakeAmount": "157,623",
+            "stakeAmountFormat": "157623",
+            "totalPrizeamount": "17,811,399",
+            "sort": 301,
+            "group": "301"
+          },
+          {
+            "prizeLevel": "二等奖(追加)",
+            "stakeCount": "19",
+            "stakeAmount": "126,098",
+            "stakeAmountFormat": "126098",
+            "totalPrizeamount": "2,395,862",
+            "sort": 401,
+            "group": "401"
+          },
+          {
+            "prizeLevel": "三等奖",
+            "stakeCount": "1096",
+            "stakeAmount": "6,666",
+            "stakeAmountFormat": "6666",
+            "totalPrizeamount": "7,305,936",
+            "sort": 501,
+            "group": "501"
+          },
+          {
+            "prizeLevel": "四等奖",
+            "stakeCount": "16686",
+            "stakeAmount": "380",
+            "stakeAmountFormat": "380",
+            "totalPrizeamount": "6,340,680",
+            "sort": 601,
+            "group": "601"
+          },
+          {
+            "prizeLevel": "五等奖",
+            "stakeCount": "76573",
+            "stakeAmount": "200",
+            "stakeAmountFormat": "200",
+            "totalPrizeamount": "15,314,600",
+            "sort": 701,
+            "group": "701"
+          },
+          {
+            "prizeLevel": "六等奖",
+            "stakeCount": "746914",
+            "stakeAmount": "18",
+            "stakeAmountFormat": "18",
+            "totalPrizeamount": "13,444,452",
+            "sort": 801,
+            "group": "801"
+          },
+          {
+            "prizeLevel": "七等奖",
+            "stakeCount": "7943233",
+            "stakeAmount": "7",
+            "stakeAmountFormat": "7",
+            "totalPrizeamount": "55,602,631",
+            "sort": 901,
+            "group": "901"
+          }
+        ]
+      },
+      {
+        "lotteryGameName": "超级大乐透",
+        "lotteryGameNum": "85",
+        "lotteryDrawNum": "26075",
+        "lotteryDrawResult": "01 06 16 18 26 04 10",
+        "lotteryDrawTime": "2026-07-06",
+        "poolBalanceAfterdraw": "814,593,833.81",
+        "totalSaleAmount": "295,227,167",
+        "drawPdfUrl": "https://pdf.sporttery.cn/33800/26075/26075.pdf",
+        "prizeLevelList": []
+      }
+    ]
+  }
+}
