@@ -5,6 +5,7 @@ import com.hotchpotch.lottery.common.exception.ErrorCode;
 import com.hotchpotch.lottery.crawler.client.SportteryCrawlerClient;
 import com.hotchpotch.lottery.crawler.record.CrawlerDraw;
 import com.hotchpotch.lottery.crawler.record.CrawlerDrawResponse;
+import com.hotchpotch.lottery.crawler.record.CrawlerHistoryPageResponse;
 import com.hotchpotch.lottery.crawler.record.CrawlerPrizeTierResponse;
 import com.hotchpotch.lottery.draw.entity.LotteryDraw;
 import com.hotchpotch.lottery.draw.entity.LotteryPrizeTier;
@@ -15,7 +16,9 @@ import com.hotchpotch.lottery.draw.repository.LotteryPrizeTierRepository;
 import com.hotchpotch.lottery.draw.repository.LotterySyncTaskRepository;
 import java.time.LocalDateTime;
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
@@ -27,6 +30,7 @@ import org.springframework.stereotype.Service;
 public class LotteryDrawSyncService {
 
     private static final String SYNC_TYPE_LATEST = "LATEST";
+    private static final String SYNC_TYPE_HISTORY_PAGE = "HISTORY_PAGE";
     private static final String STATUS_RUNNING = "RUNNING";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
@@ -57,21 +61,14 @@ public class LotteryDrawSyncService {
      * 同步 crawler 返回的最新一期大乐透开奖。
      */
     public LotteryDrawSyncResult syncLatestDraw(String triggerSource) {
-        LotterySyncTask task = createRunningTask(triggerSource);
+        LotterySyncTask task = createRunningTask(SYNC_TYPE_LATEST, triggerSource, LATEST_REQUEST_PARAMS);
         syncTaskRepository.insert(task);
 
         try {
             CrawlerDraw draw = fetchLatestDraw();
-            if (drawRepository.findByLotteryTypeAndIssueNo(draw.lotteryType(), draw.issueNo()).isPresent()) {
-                markSuccess(task, 0, 1);
-                return result(task, draw.lotteryType(), draw.issueNo());
-            }
-
-            LotteryDraw savedDraw = toDrawEntity(draw);
-            drawRepository.insert(savedDraw);
-            prizeTierRepository.insertBatch(toPrizeTierEntities(draw, savedDraw.getId()));
-
-            markSuccess(task, 1, 0);
+            int successCount = syncOneDraw(draw) ? 1 : 0;
+            int skippedCount = successCount == 1 ? 0 : 1;
+            markSuccess(task, successCount, skippedCount);
             return result(task, draw.lotteryType(), draw.issueNo());
         } catch (RuntimeException ex) {
             markFailed(task, ex);
@@ -80,17 +77,48 @@ public class LotteryDrawSyncService {
     }
 
     /**
-     * 创建一条运行中的最新开奖同步任务记录。
+     * 同步 crawler 返回的一页大乐透历史开奖。
      */
-    private LotterySyncTask createRunningTask(String triggerSource) {
+    public LotteryDrawSyncResult syncHistoryPage(int pageNo, int pageSize, String triggerSource) {
+        LotterySyncTask task = createRunningTask(
+                SYNC_TYPE_HISTORY_PAGE,
+                triggerSource,
+                historyPageRequestParams(pageNo, pageSize));
+        syncTaskRepository.insert(task);
+
+        try {
+            List<CrawlerDraw> draws = fetchHistoryPageDraws(pageNo, pageSize);
+            int successCount = 0;
+            int skippedCount = 0;
+
+            for (CrawlerDraw draw : draws) {
+                if (syncOneDraw(draw)) {
+                    successCount++;
+                } else {
+                    skippedCount++;
+                }
+            }
+
+            markSuccess(task, successCount, skippedCount);
+            return result(task, DEFAULT_LOTTERY_TYPE, null);
+        } catch (RuntimeException ex) {
+            markFailed(task, ex);
+            throw ex;
+        }
+    }
+
+    /**
+     * 创建一条运行中的开奖同步任务记录。
+     */
+    private LotterySyncTask createRunningTask(String syncType, String triggerSource, String requestParams) {
         LocalDateTime now = LocalDateTime.now();
         LotterySyncTask task = new LotterySyncTask();
-        task.setTaskNo("DLT-LATEST-" + UUID.randomUUID());
+        task.setTaskNo("DLT-" + syncType + "-" + UUID.randomUUID());
         task.setLotteryType(DEFAULT_LOTTERY_TYPE);
-        task.setSyncType(SYNC_TYPE_LATEST);
+        task.setSyncType(syncType);
         task.setTriggerSource(triggerSource);
         task.setStatus(STATUS_RUNNING);
-        task.setRequestParams(LATEST_REQUEST_PARAMS);
+        task.setRequestParams(requestParams);
         task.setSuccessCount(0);
         task.setSkippedCount(0);
         task.setFailedCount(0);
@@ -108,6 +136,63 @@ public class LotteryDrawSyncService {
         }
 
         return response.draw();
+    }
+
+    /**
+     * 从 crawler 拉取历史分页开奖数据，并将空列表归一化为空集合。
+     */
+    private List<CrawlerDraw> fetchHistoryPageDraws(int pageNo, int pageSize) {
+        CrawlerHistoryPageResponse response = crawlerClient.fetchHistoryPage(pageNo, pageSize);
+        if (response == null || response.draws() == null) {
+            return List.of();
+        }
+
+        return response.draws();
+    }
+
+    /**
+     * 同步单期开奖数据；已存在返回 false，新入库返回 true。
+     */
+    private boolean syncOneDraw(CrawlerDraw draw) {
+        return drawRepository.findByLotteryTypeAndIssueNo(draw.lotteryType(), draw.issueNo())
+                .map(existingDraw -> {
+                    fillMissingPrizeTiers(draw, existingDraw.getId());
+                    return false;
+                })
+                .orElseGet(() -> insertNewDraw(draw));
+    }
+
+    /**
+     * 插入一条新的开奖主表和对应奖级明细。
+     */
+    private boolean insertNewDraw(CrawlerDraw draw) {
+        LotteryDraw savedDraw = toDrawEntity(draw);
+        drawRepository.insert(savedDraw);
+        prizeTierRepository.insertBatch(toPrizeTierEntities(draw, savedDraw.getId()));
+        return true;
+    }
+
+    /**
+     * 为已存在的开奖补齐缺失的奖级明细，修复历史同步中断后的半成品数据。
+     */
+    private void fillMissingPrizeTiers(CrawlerDraw crawlerDraw, Long drawId) {
+        if (drawId == null || crawlerDraw.prizeTiers() == null || crawlerDraw.prizeTiers().isEmpty()) {
+            return;
+        }
+
+        Set<String> existingPrizeNames = prizeTierRepository.findByDrawId(drawId)
+                .stream()
+                .map(LotteryPrizeTier::getPrizeName)
+                .collect(Collectors.toCollection(HashSet::new));
+        List<CrawlerPrizeTierResponse> missingPrizeTiers = crawlerDraw.prizeTiers().stream()
+                .filter(prizeTier -> !existingPrizeNames.contains(prizeTier.name()))
+                .toList();
+
+        if (missingPrizeTiers.isEmpty()) {
+            return;
+        }
+
+        prizeTierRepository.insertBatch(toPrizeTierEntities(crawlerDraw, drawId, missingPrizeTiers));
     }
 
     /**
@@ -136,7 +221,17 @@ public class LotteryDrawSyncService {
             return List.of();
         }
 
-        return crawlerDraw.prizeTiers().stream()
+        return toPrizeTierEntities(crawlerDraw, drawId, crawlerDraw.prizeTiers());
+    }
+
+    /**
+     * 将指定 crawler 奖级列表转换为开奖奖级明细实体集合。
+     */
+    private Collection<LotteryPrizeTier> toPrizeTierEntities(
+            CrawlerDraw crawlerDraw,
+            Long drawId,
+            List<CrawlerPrizeTierResponse> prizeTiers) {
+        return prizeTiers.stream()
                 .map(prizeTier -> toPrizeTierEntity(crawlerDraw, drawId, prizeTier))
                 .toList();
     }
@@ -209,6 +304,13 @@ public class LotteryDrawSyncService {
         }
 
         return message.substring(0, FAILURE_REASON_MAX_LENGTH);
+    }
+
+    /**
+     * 组装历史分页同步任务的请求参数 JSON。
+     */
+    private String historyPageRequestParams(int pageNo, int pageSize) {
+        return "{\"pageNo\":" + pageNo + ",\"pageSize\":" + pageSize + "}";
     }
 
     /**

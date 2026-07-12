@@ -46,4 +46,26 @@ class AdminDrawSyncControllerSecurityTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("SUCCESS"));
     }
+
+    /**
+     * 验证本地管理端历史分页同步接口不需要 Basic Auth 也可以通过安全过滤链。
+     */
+    @Test
+    void syncHistoryPageAllowsLocalManualCallWithoutBasicAuth() throws Exception {
+        when(syncService.syncHistoryPage(1, 20, "ADMIN")).thenReturn(new LotteryDrawSyncResult(
+                "DLT-HISTORY-PAGE-001",
+                "DLT",
+                null,
+                "SUCCESS",
+                1,
+                1,
+                0));
+
+        mockMvc.perform(post("/api/admin/draws/sync/historyPage")
+                        .param("pageNo", "1")
+                        .param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"));
+    }
 }

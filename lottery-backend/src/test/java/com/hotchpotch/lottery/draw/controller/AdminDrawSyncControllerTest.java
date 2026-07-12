@@ -49,4 +49,37 @@ class AdminDrawSyncControllerTest {
 
         verify(syncService).syncLatestDraw("ADMIN");
     }
+
+    /**
+     * 验证管理端历史分页同步接口会传递分页参数，并返回统一成功响应。
+     */
+    @Test
+    void syncHistoryPageTriggersServiceAndReturnsSuccessResponse() throws Exception {
+        LotteryDrawSyncService syncService = mock(LotteryDrawSyncService.class);
+        LotteryDrawSyncResult result = new LotteryDrawSyncResult(
+                "DLT-HISTORY-PAGE-001",
+                "DLT",
+                null,
+                "SUCCESS",
+                1,
+                1,
+                0);
+        when(syncService.syncHistoryPage(1, 20, "ADMIN")).thenReturn(result);
+        MockMvc mockMvc = MockMvcBuilders
+                .standaloneSetup(new AdminDrawSyncController(syncService))
+                .build();
+
+        mockMvc.perform(post("/api/admin/draws/sync/historyPage")
+                        .param("pageNo", "1")
+                        .param("pageSize", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.taskNo").value("DLT-HISTORY-PAGE-001"))
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.successCount").value(1))
+                .andExpect(jsonPath("$.data.skippedCount").value(1))
+                .andExpect(jsonPath("$.data.failedCount").value(0));
+
+        verify(syncService).syncHistoryPage(1, 20, "ADMIN");
+    }
 }

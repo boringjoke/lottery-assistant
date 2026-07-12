@@ -23,6 +23,15 @@ class FlywayMigrationTest {
         assertThat(migration).doesNotContainIgnoringCase("FOREIGN KEY");
     }
 
+    @Test
+    void v2AllowsSamePrizeGroupWithDifferentPrizeNames() {
+        String migration = readMigration("db/migration/V2__adjust_prize_tier_unique_key.sql");
+
+        assertThat(migration).contains("DROP INDEX uk_draw_prize_group");
+        assertThat(migration).contains("ADD UNIQUE KEY uk_draw_prize_name (draw_id, prize_name)");
+        assertThat(migration).doesNotContainIgnoringCase("FOREIGN KEY");
+    }
+
     private String readMigration(String resourcePath) {
         URL resource = getClass().getClassLoader().getResource(resourcePath);
 
