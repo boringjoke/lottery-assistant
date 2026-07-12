@@ -39,6 +39,33 @@ class LotteryRepositoryTest {
     }
 
     @Test
+    void drawRepositoryFindsLatestDrawByLotteryType() {
+        LotteryDrawMapper mapper = mock(LotteryDrawMapper.class);
+        LotteryDraw draw = new LotteryDraw();
+        when(mapper.selectOne(anyDrawWrapper())).thenReturn(draw);
+
+        LotteryDrawRepository repository = new LotteryDrawRepository(mapper);
+
+        assertThat(repository.findLatestByLotteryType("DLT")).containsSame(draw);
+        verify(mapper).selectOne(anyDrawWrapper());
+    }
+
+    @Test
+    void drawRepositoryListsDrawsByLotteryTypeAndCountsTotal() {
+        LotteryDrawMapper mapper = mock(LotteryDrawMapper.class);
+        LotteryDraw draw = new LotteryDraw();
+        when(mapper.selectList(anyDrawWrapper())).thenReturn(List.of(draw));
+        when(mapper.selectCount(anyDrawWrapper())).thenReturn(1L);
+
+        LotteryDrawRepository repository = new LotteryDrawRepository(mapper);
+
+        assertThat(repository.findPageByLotteryType("DLT", 1, 20)).containsExactly(draw);
+        assertThat(repository.countByLotteryType("DLT")).isEqualTo(1L);
+        verify(mapper).selectList(anyDrawWrapper());
+        verify(mapper).selectCount(anyDrawWrapper());
+    }
+
+    @Test
     void drawRepositoryDelegatesInsertAndUpdateById() {
         LotteryDrawMapper mapper = mock(LotteryDrawMapper.class);
         LotteryDraw draw = new LotteryDraw();
