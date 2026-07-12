@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hotchpotch.lottery.draw.mapper.LotteryPrizeTierMapper">
+
+    <resultMap id="BaseResultMap" type="com.hotchpotch.lottery.draw.entity.LotteryPrizeTier">
+        <id column="id" property="id"/>
+        <result column="draw_id" property="drawId"/>
+        <result column="lottery_type" property="lotteryType"/>
+        <result column="issue_no" property="issueNo"/>
+        <result column="prize_name" property="prizeName"/>
+        <result column="stake_count" property="stakeCount"/>
+        <result column="stake_amount" property="stakeAmount"/>
+        <result column="total_prize_amount" property="totalPrizeAmount"/>
+        <result column="sort_order" property="sortOrder"/>
+        <result column="prize_group" property="prizeGroup"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+</mapper>
