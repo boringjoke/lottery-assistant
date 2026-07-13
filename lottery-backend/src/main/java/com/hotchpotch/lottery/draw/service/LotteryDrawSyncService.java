@@ -11,6 +11,7 @@ import com.hotchpotch.lottery.draw.entity.LotteryDraw;
 import com.hotchpotch.lottery.draw.entity.LotteryPrizeTier;
 import com.hotchpotch.lottery.draw.entity.LotterySyncTask;
 import com.hotchpotch.lottery.draw.record.LotteryDrawSyncResult;
+import com.hotchpotch.lottery.draw.record.LotterySyncTaskResponse;
 import com.hotchpotch.lottery.draw.repository.LotteryDrawRepository;
 import com.hotchpotch.lottery.draw.repository.LotteryPrizeTierRepository;
 import com.hotchpotch.lottery.draw.repository.LotterySyncTaskRepository;
@@ -31,6 +32,8 @@ public class LotteryDrawSyncService {
 
     private static final String SYNC_TYPE_LATEST = "LATEST";
     private static final String SYNC_TYPE_HISTORY_PAGE = "HISTORY_PAGE";
+    private static final String SYNC_TYPE_HISTORY = "HISTORY";
+    private static final String STATUS_PENDING = "PENDING";
     private static final String STATUS_RUNNING = "RUNNING";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
@@ -87,24 +90,97 @@ public class LotteryDrawSyncService {
         syncTaskRepository.insert(task);
 
         try {
-            List<CrawlerDraw> draws = fetchHistoryPageDraws(pageNo, pageSize);
-            int successCount = 0;
-            int skippedCount = 0;
-
-            for (CrawlerDraw draw : draws) {
-                if (syncOneDraw(draw)) {
-                    successCount++;
-                } else {
-                    skippedCount++;
-                }
-            }
-
-            markSuccess(task, successCount, skippedCount);
+            SyncCounter counter = syncHistoryPageDraws(pageNo, pageSize);
+            markSuccess(task, counter.successCount, counter.skippedCount);
             return result(task, DEFAULT_LOTTERY_TYPE, null);
         } catch (RuntimeException ex) {
             markFailed(task, ex);
             throw ex;
         }
+    }
+
+    /**
+     * 创建统一历史异步同步任务，任务由后台线程池继续执行。
+     */
+    public LotteryDrawSyncResult startHistorySync(
+            int startPage,
+            int pageSize,
+            int maxPages,
+            int pageDelayMillis,
+            boolean stopWhenLastPage,
+            String triggerSource) {
+        validateHistorySyncParams(startPage, pageSize, maxPages, pageDelayMillis);
+        LotterySyncTask task = createPendingHistoryTask(
+                startPage,
+                pageSize,
+                maxPages,
+                pageDelayMillis,
+                stopWhenLastPage,
+                triggerSource);
+        syncTaskRepository.insert(task);
+        return result(task, DEFAULT_LOTTERY_TYPE, null);
+    }
+
+    /**
+     * 执行已经创建好的统一历史异步同步任务。
+     */
+    public void runHistoryTask(String taskNo) {
+        LotterySyncTask task = syncTaskRepository.findByTaskNo(taskNo)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "同步任务不存在"));
+        task.setStatus(STATUS_RUNNING);
+        task.setStartTime(LocalDateTime.now());
+        task.setFailureReason(null);
+        syncTaskRepository.updateById(task);
+
+        int successCount = zeroIfNull(task.getSuccessCount());
+        int skippedCount = zeroIfNull(task.getSkippedCount());
+        int startPage = defaultIfNull(task.getStartPage(), 1);
+        int pageSize = defaultIfNull(task.getPageSize(), 20);
+        int maxPages = defaultIfNull(task.getMaxPages(), 1);
+        int pageDelayMillis = defaultIfNull(task.getPageDelayMillis(), 0);
+        boolean stopWhenLastPage = !Boolean.FALSE.equals(task.getStopWhenLastPage());
+
+        try {
+            for (int pageNo = startPage; pageNo < startPage + maxPages; pageNo++) {
+                task.setCurrentPage(pageNo);
+                syncTaskRepository.updateById(task);
+
+                CrawlerHistoryPageResponse pageResponse = fetchHistoryPageResponse(pageNo, pageSize);
+                List<CrawlerDraw> draws = normalizeHistoryDraws(pageResponse);
+                SyncCounter pageCounter = syncDraws(draws);
+                successCount += pageCounter.successCount;
+                skippedCount += pageCounter.skippedCount;
+
+                task.setSuccessCount(successCount);
+                task.setSkippedCount(skippedCount);
+                task.setFailedCount(0);
+                task.setLastSuccessPage(pageNo);
+                task.setFailedPage(null);
+                task.setFailureReason(null);
+                syncTaskRepository.updateById(task);
+
+                if (stopWhenLastPage && isLastHistoryPage(pageResponse, draws, pageNo, pageSize)) {
+                    break;
+                }
+                if (pageNo < startPage + maxPages - 1) {
+                    sleepPageDelay(pageDelayMillis);
+                }
+            }
+
+            markSuccess(task, successCount, skippedCount);
+        } catch (RuntimeException ex) {
+            task.setFailedPage(defaultIfNull(task.getCurrentPage(), startPage));
+            markFailed(task, successCount, skippedCount, 1, ex);
+        }
+    }
+
+    /**
+     * 按任务编号查询同步任务进度。
+     */
+    public LotterySyncTaskResponse findSyncTask(String taskNo) {
+        return syncTaskRepository.findByTaskNo(taskNo)
+                .map(this::toSyncTaskResponse)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "同步任务不存在"));
     }
 
     /**
@@ -127,6 +203,43 @@ public class LotteryDrawSyncService {
     }
 
     /**
+     * 创建一条等待后台执行的历史同步任务记录。
+     */
+    private LotterySyncTask createPendingHistoryTask(
+            int startPage,
+            int pageSize,
+            int maxPages,
+            int pageDelayMillis,
+            boolean stopWhenLastPage,
+            String triggerSource) {
+        LotterySyncTask task = new LotterySyncTask();
+        task.setTaskNo("DLT-" + SYNC_TYPE_HISTORY + "-" + UUID.randomUUID());
+        task.setLotteryType(DEFAULT_LOTTERY_TYPE);
+        task.setSyncType(SYNC_TYPE_HISTORY);
+        task.setTriggerSource(triggerSource);
+        task.setStatus(STATUS_PENDING);
+        task.setRequestParams(historyRequestParams(startPage, pageSize, maxPages, pageDelayMillis, stopWhenLastPage));
+        task.setStartPage(startPage);
+        task.setPageSize(pageSize);
+        task.setMaxPages(maxPages);
+        task.setPageDelayMillis(pageDelayMillis);
+        task.setStopWhenLastPage(stopWhenLastPage);
+        task.setSuccessCount(0);
+        task.setSkippedCount(0);
+        task.setFailedCount(0);
+        return task;
+    }
+
+    /**
+     * 校验历史同步任务参数，避免创建无法执行或过于危险的任务。
+     */
+    private void validateHistorySyncParams(int startPage, int pageSize, int maxPages, int pageDelayMillis) {
+        if (startPage < 1 || pageSize < 1 || maxPages < 1 || pageDelayMillis < 0) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "历史同步任务参数不合法");
+        }
+    }
+
+    /**
      * 从 crawler 拉取最新开奖数据，并校验响应体不能为空。
      */
     private CrawlerDraw fetchLatestDraw() {
@@ -142,12 +255,81 @@ public class LotteryDrawSyncService {
      * 从 crawler 拉取历史分页开奖数据，并将空列表归一化为空集合。
      */
     private List<CrawlerDraw> fetchHistoryPageDraws(int pageNo, int pageSize) {
-        CrawlerHistoryPageResponse response = crawlerClient.fetchHistoryPage(pageNo, pageSize);
+        return normalizeHistoryDraws(fetchHistoryPageResponse(pageNo, pageSize));
+    }
+
+    /**
+     * 从 crawler 拉取历史分页原始响应。
+     */
+    private CrawlerHistoryPageResponse fetchHistoryPageResponse(int pageNo, int pageSize) {
+        return crawlerClient.fetchHistoryPage(pageNo, pageSize);
+    }
+
+    /**
+     * 将历史分页响应中的开奖列表归一化为空安全集合。
+     */
+    private List<CrawlerDraw> normalizeHistoryDraws(CrawlerHistoryPageResponse response) {
         if (response == null || response.draws() == null) {
             return List.of();
         }
 
         return response.draws();
+    }
+
+    /**
+     * 判断历史分页同步是否已经到达最后一页。
+     */
+    private boolean isLastHistoryPage(
+            CrawlerHistoryPageResponse pageResponse,
+            List<CrawlerDraw> draws,
+            int pageNo,
+            int pageSize) {
+        if (pageResponse != null && pageResponse.pages() != null) {
+            return pageNo >= pageResponse.pages();
+        }
+
+        return draws.isEmpty() || draws.size() < pageSize;
+    }
+
+    /**
+     * 按配置等待历史分页之间的保护间隔。
+     */
+    private void sleepPageDelay(int pageDelayMillis) {
+        if (pageDelayMillis <= 0) {
+            return;
+        }
+
+        try {
+            Thread.sleep(pageDelayMillis);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "历史同步任务等待被中断");
+        }
+    }
+
+    /**
+     * 同步一页历史开奖数据，并返回当前页的新增和跳过数量。
+     */
+    private SyncCounter syncHistoryPageDraws(int pageNo, int pageSize) {
+        return syncDraws(fetchHistoryPageDraws(pageNo, pageSize));
+    }
+
+    /**
+     * 同步一组开奖数据，并累计新增和跳过数量。
+     */
+    private SyncCounter syncDraws(List<CrawlerDraw> draws) {
+        int successCount = 0;
+        int skippedCount = 0;
+
+        for (CrawlerDraw draw : draws) {
+            if (syncOneDraw(draw)) {
+                successCount++;
+            } else {
+                skippedCount++;
+            }
+        }
+
+        return new SyncCounter(successCount, skippedCount);
     }
 
     /**
@@ -277,6 +459,7 @@ public class LotteryDrawSyncService {
         task.setSuccessCount(successCount);
         task.setSkippedCount(skippedCount);
         task.setFailedCount(0);
+        task.setFailedPage(null);
         task.setFailureReason(null);
         task.setFinishTime(LocalDateTime.now());
         syncTaskRepository.updateById(task);
@@ -286,10 +469,22 @@ public class LotteryDrawSyncService {
      * 将同步任务标记为失败，并记录失败原因摘要。
      */
     private void markFailed(LotterySyncTask task, RuntimeException ex) {
+        markFailed(task, 0, 0, 1, ex);
+    }
+
+    /**
+     * 将同步任务标记为失败，并保留已经完成的同步数量。
+     */
+    private void markFailed(
+            LotterySyncTask task,
+            int successCount,
+            int skippedCount,
+            int failedCount,
+            RuntimeException ex) {
         task.setStatus(STATUS_FAILED);
-        task.setSuccessCount(0);
-        task.setSkippedCount(0);
-        task.setFailedCount(1);
+        task.setSuccessCount(successCount);
+        task.setSkippedCount(skippedCount);
+        task.setFailedCount(failedCount);
         task.setFailureReason(abbreviate(ex.getMessage()));
         task.setFinishTime(LocalDateTime.now());
         syncTaskRepository.updateById(task);
@@ -314,6 +509,23 @@ public class LotteryDrawSyncService {
     }
 
     /**
+     * 组装统一历史同步任务的请求参数 JSON。
+     */
+    private String historyRequestParams(
+            int startPage,
+            int pageSize,
+            int maxPages,
+            int pageDelayMillis,
+            boolean stopWhenLastPage) {
+        return "{\"startPage\":" + startPage
+                + ",\"pageSize\":" + pageSize
+                + ",\"maxPages\":" + maxPages
+                + ",\"pageDelayMillis\":" + pageDelayMillis
+                + ",\"stopWhenLastPage\":" + stopWhenLastPage
+                + "}";
+    }
+
+    /**
      * 根据同步任务和开奖标识组装对外返回的同步结果。
      */
     private LotteryDrawSyncResult result(LotterySyncTask task, String lotteryType, String issueNo) {
@@ -325,5 +537,62 @@ public class LotteryDrawSyncService {
                 task.getSuccessCount(),
                 task.getSkippedCount(),
                 task.getFailedCount());
+    }
+
+    /**
+     * 将同步任务实体转换为任务进度响应。
+     */
+    private LotterySyncTaskResponse toSyncTaskResponse(LotterySyncTask task) {
+        return new LotterySyncTaskResponse(
+                task.getTaskNo(),
+                task.getLotteryType(),
+                task.getSyncType(),
+                task.getTriggerSource(),
+                task.getStatus(),
+                task.getStartPage(),
+                task.getCurrentPage(),
+                task.getLastSuccessPage(),
+                task.getFailedPage(),
+                task.getPageSize(),
+                task.getMaxPages(),
+                task.getPageDelayMillis(),
+                task.getStopWhenLastPage(),
+                task.getSuccessCount(),
+                task.getSkippedCount(),
+                task.getFailedCount(),
+                task.getFailureReason(),
+                task.getStartTime(),
+                task.getFinishTime());
+    }
+
+    /**
+     * 将空整数按默认值处理。
+     */
+    private int defaultIfNull(Integer value, int defaultValue) {
+        return value == null ? defaultValue : value;
+    }
+
+    /**
+     * 将空计数按 0 处理。
+     */
+    private int zeroIfNull(Integer value) {
+        return defaultIfNull(value, 0);
+    }
+
+    /**
+     * 同步数量计数器。
+     */
+    private static final class SyncCounter {
+
+        private final int successCount;
+        private final int skippedCount;
+
+        /**
+         * 初始化同步数量计数器。
+         */
+        private SyncCounter(int successCount, int skippedCount) {
+            this.successCount = successCount;
+            this.skippedCount = skippedCount;
+        }
     }
 }

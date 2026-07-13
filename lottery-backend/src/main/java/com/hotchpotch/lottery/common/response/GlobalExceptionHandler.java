@@ -9,6 +9,7 @@ import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * 将异常统一转换为 API 响应结构。
@@ -32,6 +33,16 @@ public class GlobalExceptionHandler {
         return ResponseEntity
                 .badRequest()
                 .body(ApiResponse.failure(ErrorCode.INVALID_REQUEST, exception.getMessage()));
+    }
+
+    /**
+     * 将未匹配到的接口或静态资源请求转换为 404 响应。
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoResourceFoundException(NoResourceFoundException exception) {
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.failure(ErrorCode.RESOURCE_NOT_FOUND, "资源不存在"));
     }
 
     @ExceptionHandler(Exception.class)

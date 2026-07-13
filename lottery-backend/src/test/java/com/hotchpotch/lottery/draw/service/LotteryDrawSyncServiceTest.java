@@ -1,8 +1,10 @@
 package com.hotchpotch.lottery.draw.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -323,6 +325,150 @@ class LotteryDrawSyncServiceTest {
     }
 
     /**
+     * 验证统一异步历史同步启动时只创建待执行任务，不直接抓取 crawler。
+     */
+    @Test
+    void startHistorySyncCreatesPendingTaskWithoutFetchingCrawler() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository);
+
+        when(syncTaskRepository.insert(any())).thenAnswer(invocation -> {
+            LotterySyncTask task = invocation.getArgument(0);
+            task.setId(19L);
+            return 1;
+        });
+
+        LotteryDrawSyncResult result = service.startHistorySync(2, 20, 5, 1000, false, "ADMIN");
+
+        ArgumentCaptor<LotterySyncTask> taskCaptor = ArgumentCaptor.forClass(LotterySyncTask.class);
+        verify(syncTaskRepository).insert(taskCaptor.capture());
+        verify(crawlerClient, never()).fetchHistoryPage(anyInt(), anyInt());
+        LotterySyncTask pendingTask = taskCaptor.getValue();
+        assertThat(pendingTask.getSyncType()).isEqualTo("HISTORY");
+        assertThat(pendingTask.getStatus()).isEqualTo("PENDING");
+        assertThat(pendingTask.getRequestParams()).isEqualTo(
+                "{\"startPage\":2,\"pageSize\":20,\"maxPages\":5,\"pageDelayMillis\":1000,"
+                        + "\"stopWhenLastPage\":false}");
+        assertThat(pendingTask.getStartPage()).isEqualTo(2);
+        assertThat(pendingTask.getCurrentPage()).isNull();
+        assertThat(pendingTask.getLastSuccessPage()).isNull();
+        assertThat(pendingTask.getFailedPage()).isNull();
+        assertThat(pendingTask.getPageSize()).isEqualTo(20);
+        assertThat(pendingTask.getMaxPages()).isEqualTo(5);
+        assertThat(pendingTask.getPageDelayMillis()).isEqualTo(1000);
+        assertThat(pendingTask.getStopWhenLastPage()).isFalse();
+        assertThat(result.taskNo()).startsWith("DLT-HISTORY-");
+        assertThat(result.status()).isEqualTo("PENDING");
+    }
+
+    /**
+     * 验证后台历史任务会按任务参数逐页同步，并在完成后标记成功。
+     */
+    @Test
+    void runHistoryTaskFetchesPagesUpdatesProgressAndMarksSuccess() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository);
+        LotterySyncTask task = pendingHistoryTask("DLT-HISTORY-ASYNC-001");
+        CrawlerDraw newDraw = sampleCrawlerDraw("26076");
+        CrawlerDraw existingCrawlerDraw = sampleCrawlerDraw("26075");
+        LotteryDraw existingDraw = new LotteryDraw();
+        existingDraw.setId(77L);
+        LotteryPrizeTier existingFirstTier = new LotteryPrizeTier();
+        existingFirstTier.setPrizeName("一等奖");
+        LotteryPrizeTier existingSecondTier = new LotteryPrizeTier();
+        existingSecondTier.setPrizeName("二等奖");
+
+        when(syncTaskRepository.findByTaskNo("DLT-HISTORY-ASYNC-001")).thenReturn(Optional.of(task));
+        when(crawlerClient.fetchHistoryPage(1, 2)).thenReturn(new CrawlerHistoryPageResponse(
+                1,
+                2,
+                2,
+                3,
+                List.of(newDraw)));
+        when(crawlerClient.fetchHistoryPage(2, 2)).thenReturn(new CrawlerHistoryPageResponse(
+                2,
+                2,
+                2,
+                3,
+                List.of(existingCrawlerDraw)));
+        when(drawRepository.findByLotteryTypeAndIssueNo("DLT", "26076")).thenReturn(Optional.empty());
+        when(drawRepository.findByLotteryTypeAndIssueNo("DLT", "26075")).thenReturn(Optional.of(existingDraw));
+        when(prizeTierRepository.findByDrawId(77L)).thenReturn(List.of(existingFirstTier, existingSecondTier));
+        when(drawRepository.insert(any())).thenAnswer(invocation -> {
+            LotteryDraw draw = invocation.getArgument(0);
+            draw.setId(88L);
+            return 1;
+        });
+        when(prizeTierRepository.insertBatch(any())).thenReturn(2);
+
+        service.runHistoryTask("DLT-HISTORY-ASYNC-001");
+
+        verify(crawlerClient).fetchHistoryPage(1, 2);
+        verify(crawlerClient).fetchHistoryPage(2, 2);
+        verify(crawlerClient, never()).fetchHistoryPage(3, 2);
+        assertThat(task.getStatus()).isEqualTo("SUCCESS");
+        assertThat(task.getCurrentPage()).isEqualTo(2);
+        assertThat(task.getLastSuccessPage()).isEqualTo(2);
+        assertThat(task.getFailedPage()).isNull();
+        assertThat(task.getSuccessCount()).isEqualTo(1);
+        assertThat(task.getSkippedCount()).isEqualTo(1);
+        assertThat(task.getFailedCount()).isZero();
+        assertThat(task.getStartTime()).isNotNull();
+        assertThat(task.getFinishTime()).isNotNull();
+    }
+
+    /**
+     * 验证后台历史任务中途失败时会记录失败页和已完成数量。
+     */
+    @Test
+    void runHistoryTaskMarksFailedPageAndKeepsPartialCountsWhenLaterPageThrowsException() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository);
+        LotterySyncTask task = pendingHistoryTask("DLT-HISTORY-ASYNC-002");
+        BusinessException upstreamError = new BusinessException(ErrorCode.UPSTREAM_SERVICE_ERROR, "crawler timeout");
+
+        when(syncTaskRepository.findByTaskNo("DLT-HISTORY-ASYNC-002")).thenReturn(Optional.of(task));
+        when(crawlerClient.fetchHistoryPage(1, 2)).thenReturn(new CrawlerHistoryPageResponse(
+                1,
+                2,
+                2,
+                3,
+                List.of(sampleCrawlerDraw("26076"))));
+        when(crawlerClient.fetchHistoryPage(2, 2)).thenThrow(upstreamError);
+        when(drawRepository.findByLotteryTypeAndIssueNo("DLT", "26076")).thenReturn(Optional.empty());
+        when(drawRepository.insert(any())).thenAnswer(invocation -> {
+            LotteryDraw draw = invocation.getArgument(0);
+            draw.setId(88L);
+            return 1;
+        });
+        when(prizeTierRepository.insertBatch(any())).thenReturn(2);
+
+        assertThatCode(() -> service.runHistoryTask("DLT-HISTORY-ASYNC-002")).doesNotThrowAnyException();
+
+        assertThat(task.getStatus()).isEqualTo("FAILED");
+        assertThat(task.getCurrentPage()).isEqualTo(2);
+        assertThat(task.getLastSuccessPage()).isEqualTo(1);
+        assertThat(task.getFailedPage()).isEqualTo(2);
+        assertThat(task.getSuccessCount()).isEqualTo(1);
+        assertThat(task.getSkippedCount()).isZero();
+        assertThat(task.getFailedCount()).isEqualTo(1);
+        assertThat(task.getFailureReason()).contains("crawler timeout");
+        assertThat(task.getFinishTime()).isNotNull();
+    }
+
+    /**
      * 构造一条用于同步服务测试的 crawler 开奖样例数据。
      */
     private CrawlerDraw sampleCrawlerDraw() {
@@ -348,5 +494,27 @@ class LotteryDrawSyncServiceTest {
                                 new BigDecimal("15000.00"), 2, "2")),
                 "https://www.sporttery.cn/",
                 "https://www.sporttery.cn/dlt.pdf");
+    }
+
+    /**
+     * 构造一个待后台执行的历史同步任务。
+     */
+    private LotterySyncTask pendingHistoryTask(String taskNo) {
+        LotterySyncTask task = new LotterySyncTask();
+        task.setId(19L);
+        task.setTaskNo(taskNo);
+        task.setLotteryType("DLT");
+        task.setSyncType("HISTORY");
+        task.setTriggerSource("ADMIN");
+        task.setStatus("PENDING");
+        task.setStartPage(1);
+        task.setPageSize(2);
+        task.setMaxPages(2);
+        task.setPageDelayMillis(0);
+        task.setStopWhenLastPage(true);
+        task.setSuccessCount(0);
+        task.setSkippedCount(0);
+        task.setFailedCount(0);
+        return task;
     }
 }

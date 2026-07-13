@@ -32,6 +32,22 @@ class FlywayMigrationTest {
         assertThat(migration).doesNotContainIgnoringCase("FOREIGN KEY");
     }
 
+    @Test
+    void v3AddsAsyncSyncTaskProgressColumnsWithoutDatabaseForeignKeys() {
+        String migration = readMigration("db/migration/V3__add_sync_task_progress_columns.sql");
+
+        assertThat(migration).contains("ALTER TABLE lottery_sync_tasks");
+        assertThat(migration).contains("ADD COLUMN start_page");
+        assertThat(migration).contains("ADD COLUMN current_page");
+        assertThat(migration).contains("ADD COLUMN last_success_page");
+        assertThat(migration).contains("ADD COLUMN failed_page");
+        assertThat(migration).contains("ADD COLUMN page_size");
+        assertThat(migration).contains("ADD COLUMN max_pages");
+        assertThat(migration).contains("ADD COLUMN page_delay_millis");
+        assertThat(migration).contains("ADD COLUMN stop_when_last_page");
+        assertThat(migration).doesNotContainIgnoringCase("FOREIGN KEY");
+    }
+
     private String readMigration(String resourcePath) {
         URL resource = getClass().getClassLoader().getResource(resourcePath);
 

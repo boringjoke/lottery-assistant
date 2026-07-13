@@ -29,3 +29,10 @@ lottery:
     base-url: ${LOTTERY_CRAWLER_BASE_URL:http://127.0.0.1:8001}
     connect-timeout-millis: ${LOTTERY_CRAWLER_CONNECT_TIMEOUT_MILLIS:3000}
     read-timeout-millis: ${LOTTERY_CRAWLER_READ_TIMEOUT_MILLIS:10000}
+  sync:
+    core-pool-size: ${LOTTERY_SYNC_CORE_POOL_SIZE:1}
+    max-pool-size: ${LOTTERY_SYNC_MAX_POOL_SIZE:1}
+    queue-capacity: ${LOTTERY_SYNC_QUEUE_CAPACITY:10}
+    default-page-delay-millis: ${LOTTERY_SYNC_DEFAULT_PAGE_DELAY_MILLIS:2000}
+    task-delay-millis: ${LOTTERY_SYNC_TASK_DELAY_MILLIS:10000}
+    max-pages-per-task: ${LOTTERY_SYNC_MAX_PAGES_PER_TASK:20}

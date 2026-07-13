@@ -25,6 +25,20 @@ class LotteryMapperXmlTest {
         assertMapperXml("LotterySyncTaskMapper.xml", LotterySyncTaskMapper.class);
     }
 
+    @Test
+    void lotterySyncTaskMapperXmlMapsAsyncProgressColumns() {
+        String xml = readResource("mapper/draw/LotterySyncTaskMapper.xml");
+
+        assertThat(xml).contains("column=\"start_page\" property=\"startPage\"");
+        assertThat(xml).contains("column=\"current_page\" property=\"currentPage\"");
+        assertThat(xml).contains("column=\"last_success_page\" property=\"lastSuccessPage\"");
+        assertThat(xml).contains("column=\"failed_page\" property=\"failedPage\"");
+        assertThat(xml).contains("column=\"page_size\" property=\"pageSize\"");
+        assertThat(xml).contains("column=\"max_pages\" property=\"maxPages\"");
+        assertThat(xml).contains("column=\"page_delay_millis\" property=\"pageDelayMillis\"");
+        assertThat(xml).contains("column=\"stop_when_last_page\" property=\"stopWhenLastPage\"");
+    }
+
     private void assertMapperXml(String fileName, Class<?> mapperType) {
         String resourcePath = "mapper/draw/" + fileName;
         String xml = readResource(resourcePath);

@@ -44,6 +44,38 @@ public class LotterySyncTask {
     @TableField("request_params")
     private String requestParams;
 
+    /** 历史同步起始页码。 */
+    @TableField("start_page")
+    private Integer startPage;
+
+    /** 当前同步页码。 */
+    @TableField("current_page")
+    private Integer currentPage;
+
+    /** 最后成功同步页码。 */
+    @TableField("last_success_page")
+    private Integer lastSuccessPage;
+
+    /** 失败页码。 */
+    @TableField("failed_page")
+    private Integer failedPage;
+
+    /** 每页数量。 */
+    @TableField("page_size")
+    private Integer pageSize;
+
+    /** 最大同步页数。 */
+    @TableField("max_pages")
+    private Integer maxPages;
+
+    /** 每页间隔毫秒。 */
+    @TableField("page_delay_millis")
+    private Integer pageDelayMillis;
+
+    /** 遇到最后一页时是否停止。 */
+    @TableField("stop_when_last_page")
+    private Boolean stopWhenLastPage;
+
     /** 成功数量。 */
     @TableField("success_count")
     private Integer successCount;

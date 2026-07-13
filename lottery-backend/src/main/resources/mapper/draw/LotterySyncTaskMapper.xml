@@ -12,6 +12,14 @@
         <result column="trigger_source" property="triggerSource"/>
         <result column="status" property="status"/>
         <result column="request_params" property="requestParams"/>
+        <result column="start_page" property="startPage"/>
+        <result column="current_page" property="currentPage"/>
+        <result column="last_success_page" property="lastSuccessPage"/>
+        <result column="failed_page" property="failedPage"/>
+        <result column="page_size" property="pageSize"/>
+        <result column="max_pages" property="maxPages"/>
+        <result column="page_delay_millis" property="pageDelayMillis"/>
+        <result column="stop_when_last_page" property="stopWhenLastPage"/>
         <result column="success_count" property="successCount"/>
         <result column="skipped_count" property="skippedCount"/>
         <result column="failed_count" property="failedCount"/>
