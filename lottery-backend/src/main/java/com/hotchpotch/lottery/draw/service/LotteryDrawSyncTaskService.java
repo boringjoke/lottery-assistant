@@ -5,18 +5,18 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 /**
- * 开奖同步异步执行服务。
+ * 开奖同步任务执行服务。
  */
 @Service
-public class LotteryDrawSyncAsyncService {
+public class LotteryDrawSyncTaskService {
 
     private final LotteryDrawSyncService syncService;
     private final SyncProperties syncProperties;
 
     /**
-     * 初始化异步执行服务依赖的同步服务和同步配置。
+     * 初始化任务执行服务依赖的同步服务和同步配置。
      */
-    public LotteryDrawSyncAsyncService(LotteryDrawSyncService syncService, SyncProperties syncProperties) {
+    public LotteryDrawSyncTaskService(LotteryDrawSyncService syncService, SyncProperties syncProperties) {
         this.syncService = syncService;
         this.syncProperties = syncProperties;
     }
@@ -28,6 +28,18 @@ public class LotteryDrawSyncAsyncService {
     public void runHistoryTask(String taskNo) {
         try {
             syncService.runHistoryTask(taskNo);
+        } finally {
+            sleepTaskDelay();
+        }
+    }
+
+    /**
+     * 在线程池中按任务类型执行同步任务，并在任务结束后等待一段时间保护 crawler 和源站。
+     */
+    @Async("lotterySyncTaskExecutor")
+    public void runTask(String taskNo) {
+        try {
+            syncService.runTask(taskNo);
         } finally {
             sleepTaskDelay();
         }

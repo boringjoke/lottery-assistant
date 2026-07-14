@@ -21,12 +21,16 @@ import com.hotchpotch.lottery.draw.repository.LotteryDrawRepository;
 import com.hotchpotch.lottery.draw.repository.LotteryPrizeTierRepository;
 import com.hotchpotch.lottery.draw.repository.LotterySyncTaskRepository;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -124,24 +128,94 @@ public class LotteryDrawSyncService {
     }
 
     /**
+     * 创建按期号范围异步同步任务，任务由后台线程池逐页执行。
+     */
+    public LotteryDrawSyncResult startIssueRangeSync(
+            String startIssueNo,
+            String endIssueNo,
+            int startPage,
+            int pageSize,
+            int maxPages,
+            int pageDelayMillis,
+            boolean stopWhenLastPage,
+            String triggerSource) {
+        validateHistorySyncParams(startPage, pageSize, maxPages, pageDelayMillis);
+        validateIssueRangeParams(startIssueNo, endIssueNo);
+        LotterySyncTask task = createPendingIssueRangeTask(
+                startIssueNo.trim(),
+                endIssueNo.trim(),
+                startPage,
+                pageSize,
+                maxPages,
+                pageDelayMillis,
+                stopWhenLastPage,
+                triggerSource);
+        syncTaskRepository.insert(task);
+        return result(task, LotteryType.DLT.code(), null);
+    }
+
+    /**
+     * 创建按开奖日期范围异步同步任务，任务由后台线程池逐页执行。
+     */
+    public LotteryDrawSyncResult startDateRangeSync(
+            LocalDate startDate,
+            LocalDate endDate,
+            int startPage,
+            int pageSize,
+            int maxPages,
+            int pageDelayMillis,
+            boolean stopWhenLastPage,
+            String triggerSource) {
+        validateHistorySyncParams(startPage, pageSize, maxPages, pageDelayMillis);
+        validateDateRangeParams(startDate, endDate);
+        LotterySyncTask task = createPendingDateRangeTask(
+                startDate,
+                endDate,
+                startPage,
+                pageSize,
+                maxPages,
+                pageDelayMillis,
+                stopWhenLastPage,
+                triggerSource);
+        syncTaskRepository.insert(task);
+        return result(task, LotteryType.DLT.code(), null);
+    }
+
+    /**
      * 从失败页创建新的历史异步同步重试任务。
      */
     @Transactional(rollbackFor = RuntimeException.class)
-    public LotteryDrawSyncResult retryHistorySync(String taskNo, String triggerSource) {
+    public LotteryDrawSyncResult retrySyncTask(String taskNo, String triggerSource) {
         LotterySyncTask failedTask = syncTaskRepository.findByTaskNo(taskNo)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "同步任务不存在"));
-        validateRetryableHistoryTask(failedTask);
+        validateRetryableSyncTask(failedTask);
 
-        LotterySyncTask retryTask = createPendingHistoryTask(
-                failedTask.getFailedPage(),
-                defaultIfNull(failedTask.getPageSize(), PageConstants.DEFAULT_PAGE_SIZE),
-                defaultIfNull(failedTask.getMaxPages(), 1),
-                defaultIfNull(failedTask.getPageDelayMillis(), 0),
-                !Boolean.FALSE.equals(failedTask.getStopWhenLastPage()),
-                triggerSource);
+        LotterySyncTask retryTask = createRetryTask(failedTask, triggerSource);
         syncTaskRepository.insert(retryTask);
         markRetried(failedTask);
         return result(retryTask, LotteryType.DLT.code(), null);
+    }
+
+    /**
+     * 按同步任务类型执行已经创建好的异步同步任务。
+     */
+    public void runTask(String taskNo) {
+        LotterySyncTask task = syncTaskRepository.findByTaskNo(taskNo)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "同步任务不存在"));
+        if (LotterySyncType.HISTORY.code().equals(task.getSyncType())) {
+            runHistoryTask(taskNo);
+            return;
+        }
+        if (LotterySyncType.ISSUE_RANGE.code().equals(task.getSyncType())) {
+            runIssueRangeTask(task);
+            return;
+        }
+        if (LotterySyncType.DATE_RANGE.code().equals(task.getSyncType())) {
+            runDateRangeTask(task);
+            return;
+        }
+
+        throw new BusinessException(ErrorCode.INVALID_REQUEST, "不支持的异步同步任务类型");
     }
 
     /**
@@ -191,6 +265,107 @@ public class LotteryDrawSyncService {
             }
 
             markSuccess(task, successCount, skippedCount);
+        } catch (RuntimeException ex) {
+            task.setFailedPage(defaultIfNull(task.getCurrentPage(), startPage));
+            markFailed(task, successCount, skippedCount, 1, ex);
+        }
+    }
+
+    /**
+     * 执行按期号范围同步任务。
+     */
+    private void runIssueRangeTask(LotterySyncTask task) {
+        Map<String, String> params = readRequestParams(task);
+        int startIssue = parseIssueNo(requiredText(params, "startIssueNo"), "起始期号不合法");
+        int endIssue = parseIssueNo(requiredText(params, "endIssueNo"), "结束期号不合法");
+        executeFilteredHistoryTask(
+                task,
+                draw -> {
+                    int issue = parseIssueNo(draw.issueNo(), "crawler 返回期号不合法");
+                    return issue >= startIssue && issue <= endIssue;
+                },
+                draws -> hasReachedStartIssue(draws, startIssue),
+                "期号范围同步达到最大页数仍未完成");
+    }
+
+    /**
+     * 执行按开奖日期范围同步任务。
+     */
+    private void runDateRangeTask(LotterySyncTask task) {
+        Map<String, String> params = readRequestParams(task);
+        LocalDate startDate = LocalDate.parse(requiredText(params, "startDate"));
+        LocalDate endDate = LocalDate.parse(requiredText(params, "endDate"));
+        executeFilteredHistoryTask(
+                task,
+                draw -> draw.drawDate() != null
+                        && !draw.drawDate().isBefore(startDate)
+                        && !draw.drawDate().isAfter(endDate),
+                draws -> hasReachedStartDate(draws, startDate),
+                "日期范围同步达到最大页数仍未完成");
+    }
+
+    /**
+     * 执行带范围过滤的历史分页任务，并逐页更新任务进度。
+     */
+    private void executeFilteredHistoryTask(
+            LotterySyncTask task,
+            Predicate<CrawlerDraw> drawFilter,
+            Predicate<List<CrawlerDraw>> rangeEndReached,
+            String maxPagesFailureReason) {
+        task.setStatus(LotterySyncTaskStatus.RUNNING.code());
+        task.setStartTime(LocalDateTime.now());
+        task.setFailureReason(null);
+        syncTaskRepository.updateById(task);
+
+        int successCount = zeroIfNull(task.getSuccessCount());
+        int skippedCount = zeroIfNull(task.getSkippedCount());
+        int startPage = defaultIfNull(task.getStartPage(), PageConstants.DEFAULT_PAGE_NO);
+        int pageSize = defaultIfNull(task.getPageSize(), PageConstants.DEFAULT_PAGE_SIZE);
+        int maxPages = defaultIfNull(task.getMaxPages(), 1);
+        int pageDelayMillis = defaultIfNull(task.getPageDelayMillis(), 0);
+        boolean stopWhenLastPage = !Boolean.FALSE.equals(task.getStopWhenLastPage());
+        boolean completed = false;
+
+        try {
+            for (int pageNo = startPage; pageNo < startPage + maxPages; pageNo++) {
+                task.setCurrentPage(pageNo);
+                syncTaskRepository.updateById(task);
+
+                CrawlerHistoryPageResponse pageResponse = fetchHistoryPageResponse(pageNo, pageSize);
+                List<CrawlerDraw> draws = normalizeHistoryDraws(pageResponse);
+                SyncCounter pageCounter = syncDraws(draws.stream().filter(drawFilter).toList());
+                successCount += pageCounter.successCount;
+                skippedCount += pageCounter.skippedCount;
+
+                task.setSuccessCount(successCount);
+                task.setSkippedCount(skippedCount);
+                task.setFailedCount(0);
+                task.setLastSuccessPage(pageNo);
+                task.setFailedPage(null);
+                task.setFailureReason(null);
+                syncTaskRepository.updateById(task);
+
+                if ((stopWhenLastPage && isLastHistoryPage(pageResponse, draws, pageNo, pageSize))
+                        || rangeEndReached.test(draws)) {
+                    completed = true;
+                    break;
+                }
+                if (pageNo < startPage + maxPages - 1) {
+                    sleepPageDelay(pageDelayMillis);
+                }
+            }
+
+            if (completed) {
+                markSuccess(task, successCount, skippedCount);
+            } else {
+                task.setFailedPage(startPage + maxPages);
+                markFailed(
+                        task,
+                        successCount,
+                        skippedCount,
+                        1,
+                        new BusinessException(ErrorCode.INTERNAL_ERROR, maxPagesFailureReason));
+            }
         } catch (RuntimeException ex) {
             task.setFailedPage(defaultIfNull(task.getCurrentPage(), startPage));
             markFailed(task, successCount, skippedCount, 1, ex);
@@ -277,6 +452,96 @@ public class LotteryDrawSyncService {
     }
 
     /**
+     * 创建一条等待后台执行的期号范围同步任务记录。
+     */
+    private LotterySyncTask createPendingIssueRangeTask(
+            String startIssueNo,
+            String endIssueNo,
+            int startPage,
+            int pageSize,
+            int maxPages,
+            int pageDelayMillis,
+            boolean stopWhenLastPage,
+            String triggerSource) {
+        LotterySyncTask task = createPendingRangeTask(
+                LotterySyncType.ISSUE_RANGE,
+                startPage,
+                pageSize,
+                maxPages,
+                pageDelayMillis,
+                stopWhenLastPage,
+                triggerSource);
+        task.setRequestParams(issueRangeRequestParams(
+                startIssueNo,
+                endIssueNo,
+                startPage,
+                pageSize,
+                maxPages,
+                pageDelayMillis,
+                stopWhenLastPage));
+        return task;
+    }
+
+    /**
+     * 创建一条等待后台执行的日期范围同步任务记录。
+     */
+    private LotterySyncTask createPendingDateRangeTask(
+            LocalDate startDate,
+            LocalDate endDate,
+            int startPage,
+            int pageSize,
+            int maxPages,
+            int pageDelayMillis,
+            boolean stopWhenLastPage,
+            String triggerSource) {
+        LotterySyncTask task = createPendingRangeTask(
+                LotterySyncType.DATE_RANGE,
+                startPage,
+                pageSize,
+                maxPages,
+                pageDelayMillis,
+                stopWhenLastPage,
+                triggerSource);
+        task.setRequestParams(dateRangeRequestParams(
+                startDate,
+                endDate,
+                startPage,
+                pageSize,
+                maxPages,
+                pageDelayMillis,
+                stopWhenLastPage));
+        return task;
+    }
+
+    /**
+     * 创建一条等待后台执行的范围同步任务基础记录。
+     */
+    private LotterySyncTask createPendingRangeTask(
+            LotterySyncType syncType,
+            int startPage,
+            int pageSize,
+            int maxPages,
+            int pageDelayMillis,
+            boolean stopWhenLastPage,
+            String triggerSource) {
+        LotterySyncTask task = new LotterySyncTask();
+        task.setTaskNo(LotteryType.DLT.code() + "-" + syncType.code() + "-" + UUID.randomUUID());
+        task.setLotteryType(LotteryType.DLT.code());
+        task.setSyncType(syncType.code());
+        task.setTriggerSource(triggerSource);
+        task.setStatus(LotterySyncTaskStatus.PENDING.code());
+        task.setStartPage(startPage);
+        task.setPageSize(pageSize);
+        task.setMaxPages(maxPages);
+        task.setPageDelayMillis(pageDelayMillis);
+        task.setStopWhenLastPage(stopWhenLastPage);
+        task.setSuccessCount(0);
+        task.setSkippedCount(0);
+        task.setFailedCount(0);
+        return task;
+    }
+
+    /**
      * 校验历史同步任务参数，避免创建无法执行或过于危险的任务。
      */
     private void validateHistorySyncParams(int startPage, int pageSize, int maxPages, int pageDelayMillis) {
@@ -286,16 +551,92 @@ public class LotteryDrawSyncService {
     }
 
     /**
-     * 校验历史同步任务是否可以重试。
+     * 校验期号范围参数。
      */
-    private void validateRetryableHistoryTask(LotterySyncTask task) {
-        if (!LotterySyncType.HISTORY.code().equals(task.getSyncType())
+    private void validateIssueRangeParams(String startIssueNo, String endIssueNo) {
+        int startIssue = parseIssueNo(startIssueNo, "起始期号不合法");
+        int endIssue = parseIssueNo(endIssueNo, "结束期号不合法");
+        if (startIssue > endIssue) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "起始期号不能大于结束期号");
+        }
+    }
+
+    /**
+     * 校验开奖日期范围参数。
+     */
+    private void validateDateRangeParams(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null || endDate == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "日期范围不能为空");
+        }
+        if (startDate.isAfter(endDate)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "起始日期不能晚于结束日期");
+        }
+    }
+
+    /**
+     * 校验异步同步任务是否可以重试。
+     */
+    private void validateRetryableSyncTask(LotterySyncTask task) {
+        if (!isRetryableSyncType(task.getSyncType())
                 || !LotterySyncTaskStatus.FAILED.code().equals(task.getStatus())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "只有失败的历史同步任务可以重试");
         }
         if (task.getFailedPage() == null || task.getFailedPage() < 1) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "失败任务缺少有效失败页码");
         }
+    }
+
+    /**
+     * 判断同步类型是否支持从失败页重试。
+     */
+    private boolean isRetryableSyncType(String syncType) {
+        return LotterySyncType.HISTORY.code().equals(syncType)
+                || LotterySyncType.ISSUE_RANGE.code().equals(syncType)
+                || LotterySyncType.DATE_RANGE.code().equals(syncType);
+    }
+
+    /**
+     * 根据失败任务类型创建新的待执行重试任务。
+     */
+    private LotterySyncTask createRetryTask(LotterySyncTask failedTask, String triggerSource) {
+        int retryStartPage = failedTask.getFailedPage();
+        int pageSize = defaultIfNull(failedTask.getPageSize(), PageConstants.DEFAULT_PAGE_SIZE);
+        int maxPages = defaultIfNull(failedTask.getMaxPages(), 1);
+        int pageDelayMillis = defaultIfNull(failedTask.getPageDelayMillis(), 0);
+        boolean stopWhenLastPage = !Boolean.FALSE.equals(failedTask.getStopWhenLastPage());
+
+        if (LotterySyncType.HISTORY.code().equals(failedTask.getSyncType())) {
+            return createPendingHistoryTask(
+                    retryStartPage,
+                    pageSize,
+                    maxPages,
+                    pageDelayMillis,
+                    stopWhenLastPage,
+                    triggerSource);
+        }
+
+        Map<String, String> params = readRequestParams(failedTask);
+        if (LotterySyncType.ISSUE_RANGE.code().equals(failedTask.getSyncType())) {
+            return createPendingIssueRangeTask(
+                    requiredText(params, "startIssueNo"),
+                    requiredText(params, "endIssueNo"),
+                    retryStartPage,
+                    pageSize,
+                    maxPages,
+                    pageDelayMillis,
+                    stopWhenLastPage,
+                    triggerSource);
+        }
+
+        return createPendingDateRangeTask(
+                LocalDate.parse(requiredText(params, "startDate")),
+                LocalDate.parse(requiredText(params, "endDate")),
+                retryStartPage,
+                pageSize,
+                maxPages,
+                pageDelayMillis,
+                stopWhenLastPage,
+                triggerSource);
     }
 
     /**
@@ -348,6 +689,144 @@ public class LotteryDrawSyncService {
         }
 
         return draws.isEmpty() || draws.size() < pageSize;
+    }
+
+    /**
+     * 判断当前页是否已经到达期号范围下界。
+     */
+    private boolean hasReachedStartIssue(List<CrawlerDraw> draws, int startIssue) {
+        return draws.stream()
+                .map(CrawlerDraw::issueNo)
+                .map(issueNo -> parseIssueNo(issueNo, "crawler 返回期号不合法"))
+                .min(Integer::compareTo)
+                .map(minIssue -> minIssue <= startIssue)
+                .orElse(false);
+    }
+
+    /**
+     * 判断当前页是否已经到达开奖日期范围下界。
+     */
+    private boolean hasReachedStartDate(List<CrawlerDraw> draws, LocalDate startDate) {
+        return draws.stream()
+                .map(CrawlerDraw::drawDate)
+                .filter(drawDate -> drawDate != null)
+                .min(LocalDate::compareTo)
+                .map(minDate -> !minDate.isAfter(startDate))
+                .orElse(false);
+    }
+
+    /**
+     * 解析同步任务请求参数 JSON。
+     */
+    private Map<String, String> readRequestParams(LotterySyncTask task) {
+        return parseFlatJsonObject(task.getRequestParams());
+    }
+
+    /**
+     * 解析同步任务内部生成的扁平 JSON 请求参数。
+     */
+    private Map<String, String> parseFlatJsonObject(String json) {
+        if (json == null || json.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "同步任务请求参数不合法");
+        }
+
+        String source = json.trim();
+        if (!source.startsWith("{") || !source.endsWith("}")) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "同步任务请求参数不合法");
+        }
+
+        Map<String, String> params = new LinkedHashMap<>();
+        int index = 1;
+        int end = source.length() - 1;
+        while (index < end) {
+            index = skipJsonWhitespaceAndComma(source, index, end);
+            if (index >= end) {
+                break;
+            }
+            if (source.charAt(index) != '"') {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST, "同步任务请求参数不合法");
+            }
+
+            int keyEnd = source.indexOf('"', index + 1);
+            if (keyEnd < 0) {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST, "同步任务请求参数不合法");
+            }
+            String key = source.substring(index + 1, keyEnd);
+            index = skipJsonWhitespace(source, keyEnd + 1, end);
+            if (index >= end || source.charAt(index) != ':') {
+                throw new BusinessException(ErrorCode.INVALID_REQUEST, "同步任务请求参数不合法");
+            }
+
+            index = skipJsonWhitespace(source, index + 1, end);
+            String value;
+            if (index < end && source.charAt(index) == '"') {
+                int valueEnd = source.indexOf('"', index + 1);
+                if (valueEnd < 0) {
+                    throw new BusinessException(ErrorCode.INVALID_REQUEST, "同步任务请求参数不合法");
+                }
+                value = source.substring(index + 1, valueEnd);
+                index = valueEnd + 1;
+            } else {
+                int valueEnd = index;
+                while (valueEnd < end && source.charAt(valueEnd) != ',') {
+                    valueEnd++;
+                }
+                value = source.substring(index, valueEnd).trim();
+                index = valueEnd;
+            }
+            params.put(key, value);
+        }
+
+        return params;
+    }
+
+    /**
+     * 跳过 JSON 字段之间的空白字符和逗号。
+     */
+    private int skipJsonWhitespaceAndComma(String source, int index, int end) {
+        int current = index;
+        while (current < end && (Character.isWhitespace(source.charAt(current)) || source.charAt(current) == ',')) {
+            current++;
+        }
+        return current;
+    }
+
+    /**
+     * 跳过 JSON 字段内部的空白字符。
+     */
+    private int skipJsonWhitespace(String source, int index, int end) {
+        int current = index;
+        while (current < end && Character.isWhitespace(source.charAt(current))) {
+            current++;
+        }
+        return current;
+    }
+
+    /**
+     * 从请求参数 JSON 中读取必填文本字段。
+     */
+    private String requiredText(Map<String, String> params, String fieldName) {
+        String value = params == null ? null : params.get(fieldName);
+        if (value == null || value.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "同步任务请求参数缺少字段：" + fieldName);
+        }
+
+        return value.trim();
+    }
+
+    /**
+     * 将期号解析为数字，便于按大小比较范围。
+     */
+    private int parseIssueNo(String issueNo, String errorMessage) {
+        if (issueNo == null || issueNo.isBlank()) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, errorMessage);
+        }
+
+        try {
+            return Integer.parseInt(issueNo.trim());
+        } catch (NumberFormatException ex) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, errorMessage);
+        }
     }
 
     /**
@@ -593,6 +1072,48 @@ public class LotteryDrawSyncService {
     }
 
     /**
+     * 组装期号范围同步任务的请求参数 JSON。
+     */
+    private String issueRangeRequestParams(
+            String startIssueNo,
+            String endIssueNo,
+            int startPage,
+            int pageSize,
+            int maxPages,
+            int pageDelayMillis,
+            boolean stopWhenLastPage) {
+        return "{\"startIssueNo\":\"" + startIssueNo
+                + "\",\"endIssueNo\":\"" + endIssueNo
+                + "\",\"startPage\":" + startPage
+                + ",\"pageSize\":" + pageSize
+                + ",\"maxPages\":" + maxPages
+                + ",\"pageDelayMillis\":" + pageDelayMillis
+                + ",\"stopWhenLastPage\":" + stopWhenLastPage
+                + "}";
+    }
+
+    /**
+     * 组装日期范围同步任务的请求参数 JSON。
+     */
+    private String dateRangeRequestParams(
+            LocalDate startDate,
+            LocalDate endDate,
+            int startPage,
+            int pageSize,
+            int maxPages,
+            int pageDelayMillis,
+            boolean stopWhenLastPage) {
+        return "{\"startDate\":\"" + startDate
+                + "\",\"endDate\":\"" + endDate
+                + "\",\"startPage\":" + startPage
+                + ",\"pageSize\":" + pageSize
+                + ",\"maxPages\":" + maxPages
+                + ",\"pageDelayMillis\":" + pageDelayMillis
+                + ",\"stopWhenLastPage\":" + stopWhenLastPage
+                + "}";
+    }
+
+    /**
      * 根据同步任务和开奖标识组装对外返回的同步结果。
      */
     private LotteryDrawSyncResult result(LotterySyncTask task, String lotteryType, String issueNo) {
@@ -616,6 +1137,7 @@ public class LotteryDrawSyncService {
                 task.getSyncType(),
                 task.getTriggerSource(),
                 task.getStatus(),
+                task.getRequestParams(),
                 task.getStartPage(),
                 task.getCurrentPage(),
                 task.getLastSuccessPage(),

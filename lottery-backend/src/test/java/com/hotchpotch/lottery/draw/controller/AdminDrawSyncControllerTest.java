@@ -1,6 +1,7 @@
 package com.hotchpotch.lottery.draw.controller;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -9,10 +10,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.hotchpotch.lottery.config.SyncProperties;
+import com.hotchpotch.lottery.common.response.GlobalExceptionHandler;
 import com.hotchpotch.lottery.draw.record.LotteryDrawSyncResult;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageResponse;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskResponse;
-import com.hotchpotch.lottery.draw.service.LotteryDrawSyncAsyncService;
+import com.hotchpotch.lottery.draw.service.LotteryDrawSyncTaskService;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncService;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -29,7 +31,7 @@ class AdminDrawSyncControllerTest {
     @Test
     void syncLatestDrawTriggersServiceAndReturnsSuccessResponse() throws Exception {
         LotteryDrawSyncService syncService = mock(LotteryDrawSyncService.class);
-        LotteryDrawSyncAsyncService syncAsyncService = mock(LotteryDrawSyncAsyncService.class);
+        LotteryDrawSyncTaskService syncTaskService = mock(LotteryDrawSyncTaskService.class);
         LotteryDrawSyncResult result = new LotteryDrawSyncResult(
                 "DLT-LATEST-001",
                 "DLT",
@@ -40,7 +42,7 @@ class AdminDrawSyncControllerTest {
                 0);
         when(syncService.syncLatestDraw("ADMIN")).thenReturn(result);
         MockMvc mockMvc = MockMvcBuilders
-                .standaloneSetup(newController(syncService, syncAsyncService))
+                .standaloneSetup(newController(syncService, syncTaskService))
                 .build();
 
         mockMvc.perform(post("/api/admin/draws/sync/latest"))
@@ -65,7 +67,7 @@ class AdminDrawSyncControllerTest {
     @Test
     void syncHistoryPageTriggersServiceAndReturnsSuccessResponse() throws Exception {
         LotteryDrawSyncService syncService = mock(LotteryDrawSyncService.class);
-        LotteryDrawSyncAsyncService syncAsyncService = mock(LotteryDrawSyncAsyncService.class);
+        LotteryDrawSyncTaskService syncTaskService = mock(LotteryDrawSyncTaskService.class);
         LotteryDrawSyncResult result = new LotteryDrawSyncResult(
                 "DLT-HISTORY-PAGE-001",
                 "DLT",
@@ -76,7 +78,7 @@ class AdminDrawSyncControllerTest {
                 0);
         when(syncService.syncHistoryPage(1, 20, "ADMIN")).thenReturn(result);
         MockMvc mockMvc = MockMvcBuilders
-                .standaloneSetup(newController(syncService, syncAsyncService))
+                .standaloneSetup(newController(syncService, syncTaskService))
                 .build();
 
         mockMvc.perform(post("/api/admin/draws/sync/historyPage")
@@ -99,9 +101,9 @@ class AdminDrawSyncControllerTest {
     @Test
     void removedHistoryPagesAndHistoryAllEndpointsReturnNotFound() throws Exception {
         LotteryDrawSyncService syncService = mock(LotteryDrawSyncService.class);
-        LotteryDrawSyncAsyncService syncAsyncService = mock(LotteryDrawSyncAsyncService.class);
+        LotteryDrawSyncTaskService syncTaskService = mock(LotteryDrawSyncTaskService.class);
         MockMvc mockMvc = MockMvcBuilders
-                .standaloneSetup(newController(syncService, syncAsyncService))
+                .standaloneSetup(newController(syncService, syncTaskService))
                 .build();
 
         mockMvc.perform(post("/api/admin/draws/sync/historyPages"))
@@ -116,7 +118,7 @@ class AdminDrawSyncControllerTest {
     @Test
     void syncHistoryCreatesAsyncTaskFromJsonBodyAndReturnsPendingResponse() throws Exception {
         LotteryDrawSyncService syncService = mock(LotteryDrawSyncService.class);
-        LotteryDrawSyncAsyncService syncAsyncService = mock(LotteryDrawSyncAsyncService.class);
+        LotteryDrawSyncTaskService syncTaskService = mock(LotteryDrawSyncTaskService.class);
         LotteryDrawSyncResult result = new LotteryDrawSyncResult(
                 "DLT-HISTORY-ASYNC-001",
                 "DLT",
@@ -127,7 +129,7 @@ class AdminDrawSyncControllerTest {
                 0);
         when(syncService.startHistorySync(1, 20, 1, 5000, true, "ADMIN")).thenReturn(result);
         MockMvc mockMvc = MockMvcBuilders
-                .standaloneSetup(newController(syncService, syncAsyncService))
+                .standaloneSetup(newController(syncService, syncTaskService))
                 .build();
 
         mockMvc.perform(post("/api/admin/draws/sync/history")
@@ -150,7 +152,166 @@ class AdminDrawSyncControllerTest {
                 .andExpect(jsonPath("$.data.failedCount").value(0));
 
         verify(syncService).startHistorySync(1, 20, 1, 5000, true, "ADMIN");
-        verify(syncAsyncService).runHistoryTask("DLT-HISTORY-ASYNC-001");
+        verify(syncTaskService).runTask("DLT-HISTORY-ASYNC-001");
+    }
+
+    /**
+     * 验证按期号范围同步接口支持从 JSON 请求体创建异步任务。
+     */
+    @Test
+    void syncIssueRangeCreatesAsyncTaskFromJsonBodyAndReturnsPendingResponse() throws Exception {
+        LotteryDrawSyncService syncService = mock(LotteryDrawSyncService.class);
+        LotteryDrawSyncTaskService syncTaskService = mock(LotteryDrawSyncTaskService.class);
+        LotteryDrawSyncResult result = new LotteryDrawSyncResult(
+                "DLT-ISSUE-RANGE-ASYNC-001",
+                "DLT",
+                null,
+                "PENDING",
+                0,
+                0,
+                0);
+        when(syncService.startIssueRangeSync("26070", "26076", 1, 20, 3, 5000, true, "ADMIN"))
+                .thenReturn(result);
+        MockMvc mockMvc = MockMvcBuilders
+                .standaloneSetup(newController(syncService, syncTaskService))
+                .build();
+
+        mockMvc.perform(post("/api/admin/draws/sync/issueRange")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "startIssueNo": "26070",
+                                    "endIssueNo": "26076",
+                                    "startPage": 1,
+                                    "pageSize": 20,
+                                    "maxPages": 3,
+                                    "pageDelayMillis": 5000,
+                                    "stopWhenLastPage": true
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.taskNo").value("DLT-ISSUE-RANGE-ASYNC-001"))
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
+
+        verify(syncService).startIssueRangeSync("26070", "26076", 1, 20, 3, 5000, true, "ADMIN");
+        verify(syncTaskService).runTask("DLT-ISSUE-RANGE-ASYNC-001");
+    }
+
+    /**
+     * 验证按期号范围同步接口会拒绝空请求体，避免空指针进入业务逻辑。
+     */
+    @Test
+    void syncIssueRangeRejectsEmptyBody() throws Exception {
+        LotteryDrawSyncService syncService = mock(LotteryDrawSyncService.class);
+        LotteryDrawSyncTaskService syncTaskService = mock(LotteryDrawSyncTaskService.class);
+        MockMvc mockMvc = MockMvcBuilders
+                .standaloneSetup(newController(syncService, syncTaskService))
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+
+        mockMvc.perform(post("/api/admin/draws/sync/issueRange"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("期号范围同步请求体不能为空"));
+
+        verify(syncService, never()).startIssueRangeSync(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyBoolean(),
+                org.mockito.ArgumentMatchers.any());
+    }
+
+    /**
+     * 验证按开奖日期范围同步接口支持从 JSON 请求体创建异步任务。
+     */
+    @Test
+    void syncDateRangeCreatesAsyncTaskFromJsonBodyAndReturnsPendingResponse() throws Exception {
+        LotteryDrawSyncService syncService = mock(LotteryDrawSyncService.class);
+        LotteryDrawSyncTaskService syncTaskService = mock(LotteryDrawSyncTaskService.class);
+        LotteryDrawSyncResult result = new LotteryDrawSyncResult(
+                "DLT-DATE-RANGE-ASYNC-001",
+                "DLT",
+                null,
+                "PENDING",
+                0,
+                0,
+                0);
+        when(syncService.startDateRangeSync(
+                java.time.LocalDate.of(2026, 7, 1),
+                java.time.LocalDate.of(2026, 7, 11),
+                1,
+                20,
+                3,
+                5000,
+                true,
+                "ADMIN")).thenReturn(result);
+        MockMvc mockMvc = MockMvcBuilders
+                .standaloneSetup(newController(syncService, syncTaskService))
+                .build();
+
+        mockMvc.perform(post("/api/admin/draws/sync/dateRange")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "startDate": "2026-07-01",
+                                    "endDate": "2026-07-11",
+                                    "startPage": 1,
+                                    "pageSize": 20,
+                                    "maxPages": 3,
+                                    "pageDelayMillis": 5000,
+                                    "stopWhenLastPage": true
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.taskNo").value("DLT-DATE-RANGE-ASYNC-001"))
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
+
+        verify(syncService).startDateRangeSync(
+                java.time.LocalDate.of(2026, 7, 1),
+                java.time.LocalDate.of(2026, 7, 11),
+                1,
+                20,
+                3,
+                5000,
+                true,
+                "ADMIN");
+        verify(syncTaskService).runTask("DLT-DATE-RANGE-ASYNC-001");
+    }
+
+    /**
+     * 验证按日期范围同步接口会拒绝空请求体，避免空指针进入业务逻辑。
+     */
+    @Test
+    void syncDateRangeRejectsEmptyBody() throws Exception {
+        LotteryDrawSyncService syncService = mock(LotteryDrawSyncService.class);
+        LotteryDrawSyncTaskService syncTaskService = mock(LotteryDrawSyncTaskService.class);
+        MockMvc mockMvc = MockMvcBuilders
+                .standaloneSetup(newController(syncService, syncTaskService))
+                .setControllerAdvice(new GlobalExceptionHandler())
+                .build();
+
+        mockMvc.perform(post("/api/admin/draws/sync/dateRange"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("INVALID_REQUEST"))
+                .andExpect(jsonPath("$.message").value("日期范围同步请求体不能为空"));
+
+        verify(syncService, never()).startDateRangeSync(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyInt(),
+                org.mockito.ArgumentMatchers.anyBoolean(),
+                org.mockito.ArgumentMatchers.any());
     }
 
     /**
@@ -159,13 +320,14 @@ class AdminDrawSyncControllerTest {
     @Test
     void getSyncTaskReturnsTaskProgressResponse() throws Exception {
         LotteryDrawSyncService syncService = mock(LotteryDrawSyncService.class);
-        LotteryDrawSyncAsyncService syncAsyncService = mock(LotteryDrawSyncAsyncService.class);
+        LotteryDrawSyncTaskService syncTaskService = mock(LotteryDrawSyncTaskService.class);
         LotterySyncTaskResponse response = new LotterySyncTaskResponse(
                 "DLT-HISTORY-ASYNC-001",
                 "DLT",
                 "HISTORY",
                 "ADMIN",
                 "RUNNING",
+                "{\"startPage\":1,\"pageSize\":20}",
                 1,
                 3,
                 2,
@@ -182,7 +344,7 @@ class AdminDrawSyncControllerTest {
                 null);
         when(syncService.findSyncTask("DLT-HISTORY-ASYNC-001")).thenReturn(response);
         MockMvc mockMvc = MockMvcBuilders
-                .standaloneSetup(newController(syncService, syncAsyncService))
+                .standaloneSetup(newController(syncService, syncTaskService))
                 .build();
 
         mockMvc.perform(get("/api/admin/draws/sync/tasks/DLT-HISTORY-ASYNC-001"))
@@ -191,6 +353,7 @@ class AdminDrawSyncControllerTest {
                 .andExpect(jsonPath("$.data.taskNo").value("DLT-HISTORY-ASYNC-001"))
                 .andExpect(jsonPath("$.data.syncType").value("HISTORY"))
                 .andExpect(jsonPath("$.data.status").value("RUNNING"))
+                .andExpect(jsonPath("$.data.requestParams").value("{\"startPage\":1,\"pageSize\":20}"))
                 .andExpect(jsonPath("$.data.currentPage").value(3))
                 .andExpect(jsonPath("$.data.lastSuccessPage").value(2))
                 .andExpect(jsonPath("$.data.successCount").value(40));
@@ -204,13 +367,14 @@ class AdminDrawSyncControllerTest {
     @Test
     void listSyncTasksReturnsPagedTaskResponse() throws Exception {
         LotteryDrawSyncService syncService = mock(LotteryDrawSyncService.class);
-        LotteryDrawSyncAsyncService syncAsyncService = mock(LotteryDrawSyncAsyncService.class);
+        LotteryDrawSyncTaskService syncTaskService = mock(LotteryDrawSyncTaskService.class);
         LotterySyncTaskResponse task = new LotterySyncTaskResponse(
                 "DLT-HISTORY-FAILED-001",
                 "DLT",
                 "HISTORY",
                 "ADMIN",
                 "FAILED",
+                "{\"startPage\":1,\"pageSize\":20}",
                 1,
                 3,
                 2,
@@ -233,7 +397,7 @@ class AdminDrawSyncControllerTest {
                 "FAILED",
                 List.of(task)));
         MockMvc mockMvc = MockMvcBuilders
-                .standaloneSetup(newController(syncService, syncAsyncService))
+                .standaloneSetup(newController(syncService, syncTaskService))
                 .build();
 
         mockMvc.perform(post("/api/admin/draws/sync/tasks")
@@ -254,6 +418,7 @@ class AdminDrawSyncControllerTest {
                 .andExpect(jsonPath("$.data.status").value("FAILED"))
                 .andExpect(jsonPath("$.data.tasks[0].taskNo").value("DLT-HISTORY-FAILED-001"))
                 .andExpect(jsonPath("$.data.tasks[0].status").value("FAILED"))
+                .andExpect(jsonPath("$.data.tasks[0].requestParams").value("{\"startPage\":1,\"pageSize\":20}"))
                 .andExpect(jsonPath("$.data.tasks[0].failedPage").value(3));
 
         verify(syncService).listSyncTasks(1, 20, "FAILED");
@@ -265,7 +430,7 @@ class AdminDrawSyncControllerTest {
     @Test
     void retrySyncTaskCreatesNewAsyncTaskAndReturnsPendingResponse() throws Exception {
         LotteryDrawSyncService syncService = mock(LotteryDrawSyncService.class);
-        LotteryDrawSyncAsyncService syncAsyncService = mock(LotteryDrawSyncAsyncService.class);
+        LotteryDrawSyncTaskService syncTaskService = mock(LotteryDrawSyncTaskService.class);
         LotteryDrawSyncResult result = new LotteryDrawSyncResult(
                 "DLT-HISTORY-RETRY-001",
                 "DLT",
@@ -274,9 +439,9 @@ class AdminDrawSyncControllerTest {
                 0,
                 0,
                 0);
-        when(syncService.retryHistorySync("DLT-HISTORY-FAILED-001", "ADMIN")).thenReturn(result);
+        when(syncService.retrySyncTask("DLT-HISTORY-FAILED-001", "ADMIN")).thenReturn(result);
         MockMvc mockMvc = MockMvcBuilders
-                .standaloneSetup(newController(syncService, syncAsyncService))
+                .standaloneSetup(newController(syncService, syncTaskService))
                 .build();
 
         mockMvc.perform(post("/api/admin/draws/sync/tasks/DLT-HISTORY-FAILED-001/retry"))
@@ -285,8 +450,8 @@ class AdminDrawSyncControllerTest {
                 .andExpect(jsonPath("$.data.taskNo").value("DLT-HISTORY-RETRY-001"))
                 .andExpect(jsonPath("$.data.status").value("PENDING"));
 
-        verify(syncService).retryHistorySync("DLT-HISTORY-FAILED-001", "ADMIN");
-        verify(syncAsyncService).runHistoryTask("DLT-HISTORY-RETRY-001");
+        verify(syncService).retrySyncTask("DLT-HISTORY-FAILED-001", "ADMIN");
+        verify(syncTaskService).runTask("DLT-HISTORY-RETRY-001");
     }
 
     /**
@@ -294,7 +459,9 @@ class AdminDrawSyncControllerTest {
      */
     private AdminDrawSyncController newController(
             LotteryDrawSyncService syncService,
-            LotteryDrawSyncAsyncService syncAsyncService) {
-        return new AdminDrawSyncController(syncService, syncAsyncService, new SyncProperties());
+            LotteryDrawSyncTaskService syncTaskService) {
+        return new AdminDrawSyncController(syncService, syncTaskService, new SyncProperties());
     }
 }
+
+

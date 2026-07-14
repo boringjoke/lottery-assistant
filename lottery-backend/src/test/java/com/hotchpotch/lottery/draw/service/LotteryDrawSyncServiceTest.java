@@ -367,10 +367,224 @@ class LotteryDrawSyncServiceTest {
     }
 
     /**
+     * 验证按期号范围同步启动时只创建待执行任务，并把范围边界写入请求参数。
+     */
+    @Test
+    void startIssueRangeSyncCreatesPendingTaskWithoutFetchingCrawler() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository);
+
+        when(syncTaskRepository.insert(any())).thenAnswer(invocation -> {
+            LotterySyncTask task = invocation.getArgument(0);
+            task.setId(21L);
+            return 1;
+        });
+
+        LotteryDrawSyncResult result = service.startIssueRangeSync(
+                "26070", "26076", 2, 20, 5, 1000, false, "ADMIN");
+
+        ArgumentCaptor<LotterySyncTask> taskCaptor = ArgumentCaptor.forClass(LotterySyncTask.class);
+        verify(syncTaskRepository).insert(taskCaptor.capture());
+        verify(crawlerClient, never()).fetchHistoryPage(anyInt(), anyInt());
+        LotterySyncTask pendingTask = taskCaptor.getValue();
+        assertThat(pendingTask.getSyncType()).isEqualTo("ISSUE_RANGE");
+        assertThat(pendingTask.getStatus()).isEqualTo("PENDING");
+        assertThat(pendingTask.getRequestParams()).isEqualTo(
+                "{\"startIssueNo\":\"26070\",\"endIssueNo\":\"26076\",\"startPage\":2,"
+                        + "\"pageSize\":20,\"maxPages\":5,\"pageDelayMillis\":1000,"
+                        + "\"stopWhenLastPage\":false}");
+        assertThat(pendingTask.getStartPage()).isEqualTo(2);
+        assertThat(pendingTask.getPageSize()).isEqualTo(20);
+        assertThat(pendingTask.getMaxPages()).isEqualTo(5);
+        assertThat(pendingTask.getPageDelayMillis()).isEqualTo(1000);
+        assertThat(pendingTask.getStopWhenLastPage()).isFalse();
+        assertThat(result.taskNo()).startsWith("DLT-ISSUE_RANGE-");
+        assertThat(result.status()).isEqualTo("PENDING");
+    }
+
+    /**
+     * 验证按日期范围同步启动时只创建待执行任务，并把日期边界写入请求参数。
+     */
+    @Test
+    void startDateRangeSyncCreatesPendingTaskWithoutFetchingCrawler() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository);
+
+        when(syncTaskRepository.insert(any())).thenAnswer(invocation -> {
+            LotterySyncTask task = invocation.getArgument(0);
+            task.setId(22L);
+            return 1;
+        });
+
+        LotteryDrawSyncResult result = service.startDateRangeSync(
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 11),
+                2,
+                20,
+                5,
+                1000,
+                false,
+                "ADMIN");
+
+        ArgumentCaptor<LotterySyncTask> taskCaptor = ArgumentCaptor.forClass(LotterySyncTask.class);
+        verify(syncTaskRepository).insert(taskCaptor.capture());
+        verify(crawlerClient, never()).fetchHistoryPage(anyInt(), anyInt());
+        LotterySyncTask pendingTask = taskCaptor.getValue();
+        assertThat(pendingTask.getSyncType()).isEqualTo("DATE_RANGE");
+        assertThat(pendingTask.getStatus()).isEqualTo("PENDING");
+        assertThat(pendingTask.getRequestParams()).isEqualTo(
+                "{\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-11\",\"startPage\":2,"
+                        + "\"pageSize\":20,\"maxPages\":5,\"pageDelayMillis\":1000,"
+                        + "\"stopWhenLastPage\":false}");
+        assertThat(result.taskNo()).startsWith("DLT-DATE_RANGE-");
+        assertThat(result.status()).isEqualTo("PENDING");
+    }
+
+    /**
+     * 验证期号范围同步会拒绝空期号。
+     */
+    @Test
+    void startIssueRangeSyncRejectsBlankIssueNo() {
+        LotteryDrawSyncService service = newSyncServiceWithMocks();
+
+        assertThatThrownBy(() -> service.startIssueRangeSync(
+                " ",
+                "26076",
+                1,
+                20,
+                1,
+                0,
+                true,
+                "ADMIN"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("起始期号不合法");
+    }
+
+    /**
+     * 验证期号范围同步会拒绝非数字期号。
+     */
+    @Test
+    void startIssueRangeSyncRejectsNonNumericIssueNo() {
+        LotteryDrawSyncService service = newSyncServiceWithMocks();
+
+        assertThatThrownBy(() -> service.startIssueRangeSync(
+                "26070A",
+                "26076",
+                1,
+                20,
+                1,
+                0,
+                true,
+                "ADMIN"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("起始期号不合法");
+    }
+
+    /**
+     * 验证期号范围同步会拒绝起始期号大于结束期号。
+     */
+    @Test
+    void startIssueRangeSyncRejectsReversedIssueRange() {
+        LotteryDrawSyncService service = newSyncServiceWithMocks();
+
+        assertThatThrownBy(() -> service.startIssueRangeSync(
+                "26076",
+                "26070",
+                1,
+                20,
+                1,
+                0,
+                true,
+                "ADMIN"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("起始期号不能大于结束期号");
+    }
+
+    /**
+     * 验证日期范围同步会拒绝空日期。
+     */
+    @Test
+    void startDateRangeSyncRejectsNullDate() {
+        LotteryDrawSyncService service = newSyncServiceWithMocks();
+
+        assertThatThrownBy(() -> service.startDateRangeSync(
+                null,
+                LocalDate.of(2026, 7, 11),
+                1,
+                20,
+                1,
+                0,
+                true,
+                "ADMIN"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("日期范围不能为空");
+    }
+
+    /**
+     * 验证日期范围同步会拒绝起始日期晚于结束日期。
+     */
+    @Test
+    void startDateRangeSyncRejectsReversedDateRange() {
+        LotteryDrawSyncService service = newSyncServiceWithMocks();
+
+        assertThatThrownBy(() -> service.startDateRangeSync(
+                LocalDate.of(2026, 7, 11),
+                LocalDate.of(2026, 7, 1),
+                1,
+                20,
+                1,
+                0,
+                true,
+                "ADMIN"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("起始日期不能晚于结束日期");
+    }
+
+    /**
+     * 验证范围同步会拒绝非法分页参数。
+     */
+    @Test
+    void startRangeSyncRejectsInvalidPagingParams() {
+        LotteryDrawSyncService service = newSyncServiceWithMocks();
+
+        assertThatThrownBy(() -> service.startIssueRangeSync(
+                "26070",
+                "26076",
+                0,
+                20,
+                1,
+                0,
+                true,
+                "ADMIN"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("历史同步任务参数不合法");
+
+        assertThatThrownBy(() -> service.startDateRangeSync(
+                LocalDate.of(2026, 7, 1),
+                LocalDate.of(2026, 7, 11),
+                1,
+                0,
+                1,
+                0,
+                true,
+                "ADMIN"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("历史同步任务参数不合法");
+    }
+
+    /**
      * 验证失败历史任务可以从失败页创建新的待执行重试任务。
      */
     @Test
-    void retryHistorySyncCreatesPendingTaskFromFailedPage() {
+    void retrySyncTaskCreatesPendingTaskFromFailedPage() {
         SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
         LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
         LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
@@ -392,7 +606,7 @@ class LotteryDrawSyncServiceTest {
             return 1;
         });
 
-        LotteryDrawSyncResult result = service.retryHistorySync("DLT-HISTORY-FAILED-001", "ADMIN");
+        LotteryDrawSyncResult result = service.retrySyncTask("DLT-HISTORY-FAILED-001", "ADMIN");
 
         ArgumentCaptor<LotterySyncTask> taskCaptor = ArgumentCaptor.forClass(LotterySyncTask.class);
         verify(syncTaskRepository).insert(taskCaptor.capture());
@@ -411,10 +625,52 @@ class LotteryDrawSyncServiceTest {
     }
 
     /**
+     * 验证失败的期号范围任务可以保留范围参数并从失败页创建重试任务。
+     */
+    @Test
+    void retrySyncTaskCreatesIssueRangeRetryTaskFromFailedPage() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository);
+        LotterySyncTask failedTask = pendingIssueRangeTask("DLT-ISSUE-RANGE-FAILED-001");
+        failedTask.setStatus("FAILED");
+        failedTask.setFailedPage(3);
+        failedTask.setPageSize(20);
+        failedTask.setMaxPages(5);
+        failedTask.setPageDelayMillis(3000);
+        failedTask.setStopWhenLastPage(false);
+
+        when(syncTaskRepository.findByTaskNo("DLT-ISSUE-RANGE-FAILED-001")).thenReturn(Optional.of(failedTask));
+        when(syncTaskRepository.insert(any())).thenAnswer(invocation -> {
+            LotterySyncTask task = invocation.getArgument(0);
+            task.setId(23L);
+            return 1;
+        });
+
+        LotteryDrawSyncResult result = service.retrySyncTask("DLT-ISSUE-RANGE-FAILED-001", "ADMIN");
+
+        ArgumentCaptor<LotterySyncTask> taskCaptor = ArgumentCaptor.forClass(LotterySyncTask.class);
+        verify(syncTaskRepository).insert(taskCaptor.capture());
+        verify(syncTaskRepository).updateById(failedTask);
+        LotterySyncTask retryTask = taskCaptor.getValue();
+        assertThat(failedTask.getStatus()).isEqualTo("RETRIED");
+        assertThat(retryTask.getStatus()).isEqualTo("PENDING");
+        assertThat(retryTask.getSyncType()).isEqualTo("ISSUE_RANGE");
+        assertThat(retryTask.getStartPage()).isEqualTo(3);
+        assertThat(retryTask.getRequestParams()).contains("\"startIssueNo\":\"26070\"");
+        assertThat(retryTask.getRequestParams()).contains("\"endIssueNo\":\"26076\"");
+        assertThat(result.taskNo()).startsWith("DLT-ISSUE_RANGE-");
+        assertThat(result.status()).isEqualTo("PENDING");
+    }
+
+    /**
      * 验证非失败状态的历史任务不能重试。
      */
     @Test
-    void retryHistorySyncRejectsTaskThatIsNotFailed() {
+    void retrySyncTaskRejectsTaskThatIsNotFailed() {
         SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
         LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
         LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
@@ -426,7 +682,7 @@ class LotteryDrawSyncServiceTest {
 
         when(syncTaskRepository.findByTaskNo("DLT-HISTORY-RUNNING-001")).thenReturn(Optional.of(runningTask));
 
-        assertThatThrownBy(() -> service.retryHistorySync("DLT-HISTORY-RUNNING-001", "ADMIN"))
+        assertThatThrownBy(() -> service.retrySyncTask("DLT-HISTORY-RUNNING-001", "ADMIN"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("只有失败的历史同步任务可以重试");
 
@@ -437,7 +693,7 @@ class LotteryDrawSyncServiceTest {
      * 验证已经发起过重试的历史任务不能重复重试。
      */
     @Test
-    void retryHistorySyncRejectsTaskThatHasBeenRetried() {
+    void retrySyncTaskRejectsTaskThatHasBeenRetried() {
         SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
         LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
         LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
@@ -450,7 +706,7 @@ class LotteryDrawSyncServiceTest {
 
         when(syncTaskRepository.findByTaskNo("DLT-HISTORY-RETRIED-001")).thenReturn(Optional.of(retriedTask));
 
-        assertThatThrownBy(() -> service.retryHistorySync("DLT-HISTORY-RETRIED-001", "ADMIN"))
+        assertThatThrownBy(() -> service.retrySyncTask("DLT-HISTORY-RETRIED-001", "ADMIN"))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("只有失败的历史同步任务可以重试");
 
@@ -597,6 +853,144 @@ class LotteryDrawSyncServiceTest {
     }
 
     /**
+     * 验证通用任务执行入口会按同步类型分发到历史同步逻辑。
+     */
+    @Test
+    void runTaskDispatchesHistoryTaskBySyncType() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository);
+        LotterySyncTask task = pendingHistoryTask("DLT-HISTORY-ASYNC-003");
+
+        when(syncTaskRepository.findByTaskNo("DLT-HISTORY-ASYNC-003")).thenReturn(Optional.of(task));
+        when(crawlerClient.fetchHistoryPage(1, 2)).thenReturn(new CrawlerHistoryPageResponse(
+                1,
+                2,
+                1,
+                0,
+                List.of()));
+
+        service.runTask("DLT-HISTORY-ASYNC-003");
+
+        verify(crawlerClient).fetchHistoryPage(1, 2);
+        assertThat(task.getStatus()).isEqualTo("SUCCESS");
+    }
+
+    /**
+     * 验证后台期号范围任务会逐页过滤范围内开奖，并到达范围下界后停止。
+     */
+    @Test
+    void runIssueRangeTaskFiltersPagesUpdatesProgressAndMarksSuccess() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository);
+        LotterySyncTask task = pendingIssueRangeTask("DLT-ISSUE-RANGE-ASYNC-001");
+        LotteryDraw existingDraw = new LotteryDraw();
+        existingDraw.setId(77L);
+        LotteryPrizeTier existingFirstTier = new LotteryPrizeTier();
+        existingFirstTier.setPrizeName("一等奖");
+        LotteryPrizeTier existingSecondTier = new LotteryPrizeTier();
+        existingSecondTier.setPrizeName("二等奖");
+
+        when(syncTaskRepository.findByTaskNo("DLT-ISSUE-RANGE-ASYNC-001")).thenReturn(Optional.of(task));
+        when(crawlerClient.fetchHistoryPage(1, 2)).thenReturn(new CrawlerHistoryPageResponse(
+                1,
+                2,
+                3,
+                6,
+                List.of(sampleCrawlerDraw("26078"), sampleCrawlerDraw("26076"))));
+        when(crawlerClient.fetchHistoryPage(2, 2)).thenReturn(new CrawlerHistoryPageResponse(
+                2,
+                2,
+                3,
+                6,
+                List.of(sampleCrawlerDraw("26075"), sampleCrawlerDraw("26070"))));
+        when(drawRepository.findByLotteryTypeAndIssueNo("DLT", "26076")).thenReturn(Optional.empty());
+        when(drawRepository.findByLotteryTypeAndIssueNo("DLT", "26075")).thenReturn(Optional.of(existingDraw));
+        when(drawRepository.findByLotteryTypeAndIssueNo("DLT", "26070")).thenReturn(Optional.empty());
+        when(prizeTierRepository.findByDrawId(77L)).thenReturn(List.of(existingFirstTier, existingSecondTier));
+        when(drawRepository.insert(any())).thenAnswer(invocation -> {
+            LotteryDraw draw = invocation.getArgument(0);
+            draw.setId(88L);
+            return 1;
+        });
+        when(prizeTierRepository.insertBatch(any())).thenReturn(2);
+
+        service.runTask("DLT-ISSUE-RANGE-ASYNC-001");
+
+        verify(crawlerClient).fetchHistoryPage(1, 2);
+        verify(crawlerClient).fetchHistoryPage(2, 2);
+        verify(crawlerClient, never()).fetchHistoryPage(3, 2);
+        assertThat(task.getStatus()).isEqualTo("SUCCESS");
+        assertThat(task.getCurrentPage()).isEqualTo(2);
+        assertThat(task.getLastSuccessPage()).isEqualTo(2);
+        assertThat(task.getFailedPage()).isNull();
+        assertThat(task.getSuccessCount()).isEqualTo(2);
+        assertThat(task.getSkippedCount()).isEqualTo(1);
+        assertThat(task.getFailedCount()).isZero();
+        assertThat(task.getStartTime()).isNotNull();
+        assertThat(task.getFinishTime()).isNotNull();
+    }
+
+    /**
+     * 验证后台日期范围任务会逐页过滤范围内开奖，并到达日期下界后停止。
+     */
+    @Test
+    void runDateRangeTaskFiltersPagesUpdatesProgressAndMarksSuccess() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository);
+        LotterySyncTask task = pendingDateRangeTask("DLT-DATE-RANGE-ASYNC-001");
+
+        when(syncTaskRepository.findByTaskNo("DLT-DATE-RANGE-ASYNC-001")).thenReturn(Optional.of(task));
+        when(crawlerClient.fetchHistoryPage(1, 2)).thenReturn(new CrawlerHistoryPageResponse(
+                1,
+                2,
+                3,
+                6,
+                List.of(
+                        sampleCrawlerDraw("26078", LocalDate.of(2026, 7, 14)),
+                        sampleCrawlerDraw("26076", LocalDate.of(2026, 7, 11)))));
+        when(crawlerClient.fetchHistoryPage(2, 2)).thenReturn(new CrawlerHistoryPageResponse(
+                2,
+                2,
+                3,
+                6,
+                List.of(
+                        sampleCrawlerDraw("26075", LocalDate.of(2026, 7, 7)),
+                        sampleCrawlerDraw("26070", LocalDate.of(2026, 6, 30)))));
+        when(drawRepository.findByLotteryTypeAndIssueNo("DLT", "26076")).thenReturn(Optional.empty());
+        when(drawRepository.findByLotteryTypeAndIssueNo("DLT", "26075")).thenReturn(Optional.empty());
+        when(drawRepository.insert(any())).thenAnswer(invocation -> {
+            LotteryDraw draw = invocation.getArgument(0);
+            draw.setId(88L);
+            return 1;
+        });
+        when(prizeTierRepository.insertBatch(any())).thenReturn(2);
+
+        service.runTask("DLT-DATE-RANGE-ASYNC-001");
+
+        verify(crawlerClient).fetchHistoryPage(1, 2);
+        verify(crawlerClient).fetchHistoryPage(2, 2);
+        verify(crawlerClient, never()).fetchHistoryPage(3, 2);
+        assertThat(task.getStatus()).isEqualTo("SUCCESS");
+        assertThat(task.getCurrentPage()).isEqualTo(2);
+        assertThat(task.getLastSuccessPage()).isEqualTo(2);
+        assertThat(task.getSuccessCount()).isEqualTo(2);
+        assertThat(task.getSkippedCount()).isZero();
+        assertThat(task.getFailedCount()).isZero();
+    }
+
+    /**
      * 构造一条用于同步服务测试的 crawler 开奖样例数据。
      */
     private CrawlerDraw sampleCrawlerDraw() {
@@ -604,13 +998,31 @@ class LotteryDrawSyncServiceTest {
     }
 
     /**
+     * 构造一个使用 mock 依赖的同步服务。
+     */
+    private LotteryDrawSyncService newSyncServiceWithMocks() {
+        return new LotteryDrawSyncService(
+                org.mockito.Mockito.mock(SportteryCrawlerClient.class),
+                org.mockito.Mockito.mock(LotteryDrawRepository.class),
+                org.mockito.Mockito.mock(LotteryPrizeTierRepository.class),
+                org.mockito.Mockito.mock(LotterySyncTaskRepository.class));
+    }
+
+    /**
      * 构造指定期号的 crawler 开奖样例数据。
      */
     private CrawlerDraw sampleCrawlerDraw(String issueNo) {
+        return sampleCrawlerDraw(issueNo, LocalDate.of(2026, 7, 11));
+    }
+
+    /**
+     * 构造指定期号和开奖日期的 crawler 开奖样例数据。
+     */
+    private CrawlerDraw sampleCrawlerDraw(String issueNo, LocalDate drawDate) {
         return new CrawlerDraw(
                 "DLT",
                 issueNo,
-                LocalDate.of(2026, 7, 11),
+                drawDate,
                 List.of(1, 2, 3, 4, 5),
                 List.of(6, 7),
                 new BigDecimal("1000000.00"),
@@ -645,4 +1057,53 @@ class LotteryDrawSyncServiceTest {
         task.setFailedCount(0);
         return task;
     }
+
+    /**
+     * 构造一个待后台执行的期号范围同步任务。
+     */
+    private LotterySyncTask pendingIssueRangeTask(String taskNo) {
+        LotterySyncTask task = new LotterySyncTask();
+        task.setId(21L);
+        task.setTaskNo(taskNo);
+        task.setLotteryType("DLT");
+        task.setSyncType("ISSUE_RANGE");
+        task.setTriggerSource("ADMIN");
+        task.setStatus("PENDING");
+        task.setRequestParams("{\"startIssueNo\":\"26070\",\"endIssueNo\":\"26076\",\"startPage\":1,"
+                + "\"pageSize\":2,\"maxPages\":3,\"pageDelayMillis\":0,\"stopWhenLastPage\":true}");
+        task.setStartPage(1);
+        task.setPageSize(2);
+        task.setMaxPages(3);
+        task.setPageDelayMillis(0);
+        task.setStopWhenLastPage(true);
+        task.setSuccessCount(0);
+        task.setSkippedCount(0);
+        task.setFailedCount(0);
+        return task;
+    }
+
+    /**
+     * 构造一个待后台执行的日期范围同步任务。
+     */
+    private LotterySyncTask pendingDateRangeTask(String taskNo) {
+        LotterySyncTask task = new LotterySyncTask();
+        task.setId(22L);
+        task.setTaskNo(taskNo);
+        task.setLotteryType("DLT");
+        task.setSyncType("DATE_RANGE");
+        task.setTriggerSource("ADMIN");
+        task.setStatus("PENDING");
+        task.setRequestParams("{\"startDate\":\"2026-07-01\",\"endDate\":\"2026-07-11\",\"startPage\":1,"
+                + "\"pageSize\":2,\"maxPages\":3,\"pageDelayMillis\":0,\"stopWhenLastPage\":true}");
+        task.setStartPage(1);
+        task.setPageSize(2);
+        task.setMaxPages(3);
+        task.setPageDelayMillis(0);
+        task.setStopWhenLastPage(true);
+        task.setSuccessCount(0);
+        task.setSkippedCount(0);
+        task.setFailedCount(0);
+        return task;
+    }
 }
+

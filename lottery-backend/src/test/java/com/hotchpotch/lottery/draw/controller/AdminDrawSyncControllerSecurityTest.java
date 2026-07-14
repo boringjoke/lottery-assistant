@@ -9,7 +9,7 @@ import com.hotchpotch.lottery.config.SecurityConfig;
 import com.hotchpotch.lottery.config.SyncProperties;
 import com.hotchpotch.lottery.draw.record.LotteryDrawSyncResult;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageResponse;
-import com.hotchpotch.lottery.draw.service.LotteryDrawSyncAsyncService;
+import com.hotchpotch.lottery.draw.service.LotteryDrawSyncTaskService;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -33,7 +33,7 @@ class AdminDrawSyncControllerSecurityTest {
     private LotteryDrawSyncService syncService;
 
     @MockitoBean
-    private LotteryDrawSyncAsyncService syncAsyncService;
+    private LotteryDrawSyncTaskService syncTaskService;
 
     @MockitoBean
     private SyncProperties syncProperties;
@@ -156,7 +156,7 @@ class AdminDrawSyncControllerSecurityTest {
      */
     @Test
     void retrySyncTaskAllowsLocalManualCallWithoutBasicAuth() throws Exception {
-        when(syncService.retryHistorySync("DLT-HISTORY-FAILED-001", "ADMIN"))
+        when(syncService.retrySyncTask("DLT-HISTORY-FAILED-001", "ADMIN"))
                 .thenReturn(new LotteryDrawSyncResult(
                         "DLT-HISTORY-RETRY-001",
                         "DLT",
@@ -172,3 +172,5 @@ class AdminDrawSyncControllerSecurityTest {
                 .andExpect(jsonPath("$.data.status").value("PENDING"));
     }
 }
+
+

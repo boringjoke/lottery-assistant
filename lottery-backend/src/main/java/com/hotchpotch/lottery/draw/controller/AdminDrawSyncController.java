@@ -1,16 +1,20 @@
 package com.hotchpotch.lottery.draw.controller;
 
 import com.hotchpotch.lottery.common.constant.PageConstants;
+import com.hotchpotch.lottery.common.exception.BusinessException;
+import com.hotchpotch.lottery.common.exception.ErrorCode;
 import com.hotchpotch.lottery.common.response.ApiResponse;
 import com.hotchpotch.lottery.config.SyncProperties;
 import com.hotchpotch.lottery.draw.enums.LotterySyncTriggerSource;
+import com.hotchpotch.lottery.draw.record.LotteryDateRangeSyncRequest;
 import com.hotchpotch.lottery.draw.record.LotteryDrawSyncResult;
 import com.hotchpotch.lottery.draw.record.LotteryHistorySyncRequest;
+import com.hotchpotch.lottery.draw.record.LotteryIssueRangeSyncRequest;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageRequest;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageResponse;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskResponse;
-import com.hotchpotch.lottery.draw.service.LotteryDrawSyncAsyncService;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncService;
+import com.hotchpotch.lottery.draw.service.LotteryDrawSyncTaskService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,7 +31,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AdminDrawSyncController {
 
     private final LotteryDrawSyncService syncService;
-    private final LotteryDrawSyncAsyncService syncAsyncService;
+    private final LotteryDrawSyncTaskService syncTaskService;
     private final SyncProperties syncProperties;
 
     /**
@@ -35,10 +39,10 @@ public class AdminDrawSyncController {
      */
     public AdminDrawSyncController(
             LotteryDrawSyncService syncService,
-            LotteryDrawSyncAsyncService syncAsyncService,
+            LotteryDrawSyncTaskService syncTaskService,
             SyncProperties syncProperties) {
         this.syncService = syncService;
-        this.syncAsyncService = syncAsyncService;
+        this.syncTaskService = syncTaskService;
         this.syncProperties = syncProperties;
     }
 
@@ -91,7 +95,71 @@ public class AdminDrawSyncController {
                 resolvedPageDelayMillis,
                 resolvedStopWhenLastPage,
                 LotterySyncTriggerSource.ADMIN.code());
-        syncAsyncService.runHistoryTask(result.taskNo());
+        syncTaskService.runTask(result.taskNo());
+        return ApiResponse.success(result);
+    }
+
+    /**
+     * 手动创建按期号范围异步同步任务，并立即返回任务编号。
+     */
+    @PostMapping("/issueRange")
+    public ApiResponse<LotteryDrawSyncResult> syncIssueRange(
+            @RequestBody(required = false) LotteryIssueRangeSyncRequest request) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "期号范围同步请求体不能为空");
+        }
+
+        int resolvedStartPage = defaultIfNull(request.startPage(), PageConstants.DEFAULT_PAGE_NO);
+        int resolvedPageSize = defaultIfNull(request.pageSize(), PageConstants.DEFAULT_PAGE_SIZE);
+        int resolvedMaxPages = Math.min(
+                defaultIfNull(request.maxPages(), syncProperties.maxPagesPerTask()),
+                syncProperties.maxPagesPerTask());
+        int resolvedPageDelayMillis = defaultIfNull(
+                request.pageDelayMillis(),
+                syncProperties.defaultPageDelayMillis());
+        boolean resolvedStopWhenLastPage = defaultIfNull(request.stopWhenLastPage(), true);
+        LotteryDrawSyncResult result = syncService.startIssueRangeSync(
+                request.startIssueNo(),
+                request.endIssueNo(),
+                resolvedStartPage,
+                resolvedPageSize,
+                resolvedMaxPages,
+                resolvedPageDelayMillis,
+                resolvedStopWhenLastPage,
+                LotterySyncTriggerSource.ADMIN.code());
+        syncTaskService.runTask(result.taskNo());
+        return ApiResponse.success(result);
+    }
+
+    /**
+     * 手动创建按开奖日期范围异步同步任务，并立即返回任务编号。
+     */
+    @PostMapping("/dateRange")
+    public ApiResponse<LotteryDrawSyncResult> syncDateRange(
+            @RequestBody(required = false) LotteryDateRangeSyncRequest request) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "日期范围同步请求体不能为空");
+        }
+
+        int resolvedStartPage = defaultIfNull(request.startPage(), PageConstants.DEFAULT_PAGE_NO);
+        int resolvedPageSize = defaultIfNull(request.pageSize(), PageConstants.DEFAULT_PAGE_SIZE);
+        int resolvedMaxPages = Math.min(
+                defaultIfNull(request.maxPages(), syncProperties.maxPagesPerTask()),
+                syncProperties.maxPagesPerTask());
+        int resolvedPageDelayMillis = defaultIfNull(
+                request.pageDelayMillis(),
+                syncProperties.defaultPageDelayMillis());
+        boolean resolvedStopWhenLastPage = defaultIfNull(request.stopWhenLastPage(), true);
+        LotteryDrawSyncResult result = syncService.startDateRangeSync(
+                request.startDate(),
+                request.endDate(),
+                resolvedStartPage,
+                resolvedPageSize,
+                resolvedMaxPages,
+                resolvedPageDelayMillis,
+                resolvedStopWhenLastPage,
+                LotterySyncTriggerSource.ADMIN.code());
+        syncTaskService.runTask(result.taskNo());
         return ApiResponse.success(result);
     }
 
@@ -124,10 +192,10 @@ public class AdminDrawSyncController {
      */
     @PostMapping("/tasks/{taskNo}/retry")
     public ApiResponse<LotteryDrawSyncResult> retrySyncTask(@PathVariable String taskNo) {
-        LotteryDrawSyncResult result = syncService.retryHistorySync(
+        LotteryDrawSyncResult result = syncService.retrySyncTask(
                 taskNo,
                 LotterySyncTriggerSource.ADMIN.code());
-        syncAsyncService.runHistoryTask(result.taskNo());
+        syncTaskService.runTask(result.taskNo());
         return ApiResponse.success(result);
     }
 
