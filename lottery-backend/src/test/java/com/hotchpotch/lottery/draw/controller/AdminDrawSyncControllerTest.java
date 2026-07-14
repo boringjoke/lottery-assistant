@@ -10,10 +10,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.hotchpotch.lottery.config.SyncProperties;
 import com.hotchpotch.lottery.draw.record.LotteryDrawSyncResult;
+import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageResponse;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskResponse;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncAsyncService;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncService;
 import java.time.LocalDateTime;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -194,6 +196,97 @@ class AdminDrawSyncControllerTest {
                 .andExpect(jsonPath("$.data.successCount").value(40));
 
         verify(syncService).findSyncTask("DLT-HISTORY-ASYNC-001");
+    }
+
+    /**
+     * 验证同步任务列表接口会传递分页和状态筛选参数，并返回分页数据。
+     */
+    @Test
+    void listSyncTasksReturnsPagedTaskResponse() throws Exception {
+        LotteryDrawSyncService syncService = mock(LotteryDrawSyncService.class);
+        LotteryDrawSyncAsyncService syncAsyncService = mock(LotteryDrawSyncAsyncService.class);
+        LotterySyncTaskResponse task = new LotterySyncTaskResponse(
+                "DLT-HISTORY-FAILED-001",
+                "DLT",
+                "HISTORY",
+                "ADMIN",
+                "FAILED",
+                1,
+                3,
+                2,
+                3,
+                20,
+                10,
+                2000,
+                true,
+                40,
+                0,
+                1,
+                "crawler timeout",
+                LocalDateTime.of(2026, 7, 13, 10, 0),
+                LocalDateTime.of(2026, 7, 13, 10, 1));
+        when(syncService.listSyncTasks(1, 20, "FAILED")).thenReturn(new LotterySyncTaskPageResponse(
+                1,
+                20,
+                1L,
+                1,
+                "FAILED",
+                List.of(task)));
+        MockMvc mockMvc = MockMvcBuilders
+                .standaloneSetup(newController(syncService, syncAsyncService))
+                .build();
+
+        mockMvc.perform(post("/api/admin/draws/sync/tasks")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "pageNo": 1,
+                                    "pageSize": 20,
+                                    "status": "FAILED"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.pageNo").value(1))
+                .andExpect(jsonPath("$.data.pageSize").value(20))
+                .andExpect(jsonPath("$.data.total").value(1))
+                .andExpect(jsonPath("$.data.pages").value(1))
+                .andExpect(jsonPath("$.data.status").value("FAILED"))
+                .andExpect(jsonPath("$.data.tasks[0].taskNo").value("DLT-HISTORY-FAILED-001"))
+                .andExpect(jsonPath("$.data.tasks[0].status").value("FAILED"))
+                .andExpect(jsonPath("$.data.tasks[0].failedPage").value(3));
+
+        verify(syncService).listSyncTasks(1, 20, "FAILED");
+    }
+
+    /**
+     * 验证失败任务重试接口会创建新的异步任务并提交后台执行。
+     */
+    @Test
+    void retrySyncTaskCreatesNewAsyncTaskAndReturnsPendingResponse() throws Exception {
+        LotteryDrawSyncService syncService = mock(LotteryDrawSyncService.class);
+        LotteryDrawSyncAsyncService syncAsyncService = mock(LotteryDrawSyncAsyncService.class);
+        LotteryDrawSyncResult result = new LotteryDrawSyncResult(
+                "DLT-HISTORY-RETRY-001",
+                "DLT",
+                null,
+                "PENDING",
+                0,
+                0,
+                0);
+        when(syncService.retryHistorySync("DLT-HISTORY-FAILED-001", "ADMIN")).thenReturn(result);
+        MockMvc mockMvc = MockMvcBuilders
+                .standaloneSetup(newController(syncService, syncAsyncService))
+                .build();
+
+        mockMvc.perform(post("/api/admin/draws/sync/tasks/DLT-HISTORY-FAILED-001/retry"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.taskNo").value("DLT-HISTORY-RETRY-001"))
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
+
+        verify(syncService).retryHistorySync("DLT-HISTORY-FAILED-001", "ADMIN");
+        verify(syncAsyncService).runHistoryTask("DLT-HISTORY-RETRY-001");
     }
 
     /**

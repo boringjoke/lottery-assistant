@@ -36,7 +36,7 @@ public class LotterySyncTask {
     @TableField("trigger_source")
     private String triggerSource;
 
-    /** 任务状态：PENDING、RUNNING、SUCCESS、PARTIAL_SUCCESS、FAILED。 */
+    /** 任务状态：PENDING、RUNNING、SUCCESS、PARTIAL_SUCCESS、FAILED、RETRIED。 */
     @TableField("status")
     private String status;
 

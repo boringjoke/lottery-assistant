@@ -11,6 +11,7 @@ import com.hotchpotch.lottery.draw.entity.LotteryDraw;
 import com.hotchpotch.lottery.draw.entity.LotteryPrizeTier;
 import com.hotchpotch.lottery.draw.entity.LotterySyncTask;
 import com.hotchpotch.lottery.draw.record.LotteryDrawSyncResult;
+import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageResponse;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskResponse;
 import com.hotchpotch.lottery.draw.repository.LotteryDrawRepository;
 import com.hotchpotch.lottery.draw.repository.LotteryPrizeTierRepository;
@@ -19,10 +20,12 @@ import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 大乐透开奖同步服务。
@@ -37,9 +40,13 @@ public class LotteryDrawSyncService {
     private static final String STATUS_RUNNING = "RUNNING";
     private static final String STATUS_SUCCESS = "SUCCESS";
     private static final String STATUS_FAILED = "FAILED";
+    private static final String STATUS_RETRIED = "RETRIED";
     private static final String DEFAULT_LOTTERY_TYPE = "DLT";
     private static final String LATEST_REQUEST_PARAMS = "{\"source\":\"crawler.latest\"}";
     private static final int FAILURE_REASON_MAX_LENGTH = 1000;
+    private static final int DEFAULT_PAGE_NO = 1;
+    private static final int DEFAULT_PAGE_SIZE = 20;
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final SportteryCrawlerClient crawlerClient;
     private final LotteryDrawRepository drawRepository;
@@ -122,6 +129,27 @@ public class LotteryDrawSyncService {
     }
 
     /**
+     * 从失败页创建新的历史异步同步重试任务。
+     */
+    @Transactional(rollbackFor = RuntimeException.class)
+    public LotteryDrawSyncResult retryHistorySync(String taskNo, String triggerSource) {
+        LotterySyncTask failedTask = syncTaskRepository.findByTaskNo(taskNo)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "同步任务不存在"));
+        validateRetryableHistoryTask(failedTask);
+
+        LotterySyncTask retryTask = createPendingHistoryTask(
+                failedTask.getFailedPage(),
+                defaultIfNull(failedTask.getPageSize(), 20),
+                defaultIfNull(failedTask.getMaxPages(), 1),
+                defaultIfNull(failedTask.getPageDelayMillis(), 0),
+                !Boolean.FALSE.equals(failedTask.getStopWhenLastPage()),
+                triggerSource);
+        syncTaskRepository.insert(retryTask);
+        markRetried(failedTask);
+        return result(retryTask, DEFAULT_LOTTERY_TYPE, null);
+    }
+
+    /**
      * 执行已经创建好的统一历史异步同步任务。
      */
     public void runHistoryTask(String taskNo) {
@@ -184,6 +212,29 @@ public class LotteryDrawSyncService {
     }
 
     /**
+     * 分页查询同步任务列表，状态为空时返回全部任务。
+     */
+    public LotterySyncTaskPageResponse listSyncTasks(int pageNo, int pageSize, String status) {
+        int safePageNo = normalizePageNo(pageNo);
+        int safePageSize = normalizePageSize(pageSize);
+        String normalizedStatus = normalizeStatus(status);
+        Long total = syncTaskRepository.countByStatus(normalizedStatus);
+        List<LotterySyncTaskResponse> tasks = syncTaskRepository
+                .findPageByStatus(normalizedStatus, safePageNo, safePageSize)
+                .stream()
+                .map(this::toSyncTaskResponse)
+                .toList();
+
+        return new LotterySyncTaskPageResponse(
+                safePageNo,
+                safePageSize,
+                total,
+                calculatePages(total, safePageSize),
+                normalizedStatus,
+                tasks);
+    }
+
+    /**
      * 创建一条运行中的开奖同步任务记录。
      */
     private LotterySyncTask createRunningTask(String syncType, String triggerSource, String requestParams) {
@@ -236,6 +287,18 @@ public class LotteryDrawSyncService {
     private void validateHistorySyncParams(int startPage, int pageSize, int maxPages, int pageDelayMillis) {
         if (startPage < 1 || pageSize < 1 || maxPages < 1 || pageDelayMillis < 0) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "历史同步任务参数不合法");
+        }
+    }
+
+    /**
+     * 校验历史同步任务是否可以重试。
+     */
+    private void validateRetryableHistoryTask(LotterySyncTask task) {
+        if (!SYNC_TYPE_HISTORY.equals(task.getSyncType()) || !STATUS_FAILED.equals(task.getStatus())) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "只有失败的历史同步任务可以重试");
+        }
+        if (task.getFailedPage() == null || task.getFailedPage() < 1) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "失败任务缺少有效失败页码");
         }
     }
 
@@ -491,6 +554,14 @@ public class LotteryDrawSyncService {
     }
 
     /**
+     * 将原失败任务标记为已发起重试，避免重复创建重试任务。
+     */
+    private void markRetried(LotterySyncTask task) {
+        task.setStatus(STATUS_RETRIED);
+        syncTaskRepository.updateById(task);
+    }
+
+    /**
      * 将失败原因裁剪到数据库字段允许的最大长度。
      */
     private String abbreviate(String message) {
@@ -577,6 +648,46 @@ public class LotteryDrawSyncService {
      */
     private int zeroIfNull(Integer value) {
         return defaultIfNull(value, 0);
+    }
+
+    /**
+     * 将页码归一化为从 1 开始的有效页码。
+     */
+    private int normalizePageNo(int pageNo) {
+        return pageNo <= 0 ? DEFAULT_PAGE_NO : pageNo;
+    }
+
+    /**
+     * 将分页大小归一化到允许范围内。
+     */
+    private int normalizePageSize(int pageSize) {
+        if (pageSize <= 0) {
+            return DEFAULT_PAGE_SIZE;
+        }
+
+        return Math.min(pageSize, MAX_PAGE_SIZE);
+    }
+
+    /**
+     * 将状态筛选归一化为数据库中的大写状态值。
+     */
+    private String normalizeStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return null;
+        }
+
+        return status.trim().toUpperCase(Locale.ROOT);
+    }
+
+    /**
+     * 根据总数和分页大小计算总页数。
+     */
+    private int calculatePages(Long total, int pageSize) {
+        if (total == null || total <= 0) {
+            return 0;
+        }
+
+        return (int) ((total + pageSize - 1) / pageSize);
     }
 
     /**

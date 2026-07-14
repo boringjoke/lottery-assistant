@@ -8,8 +8,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.hotchpotch.lottery.config.SecurityConfig;
 import com.hotchpotch.lottery.config.SyncProperties;
 import com.hotchpotch.lottery.draw.record.LotteryDrawSyncResult;
+import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageResponse;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncAsyncService;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncService;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -117,6 +119,54 @@ class AdminDrawSyncControllerSecurityTest {
                                     "stopWhenLastPage": true
                                 }
                                 """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
+    }
+
+    /**
+     * 验证本地管理端同步任务列表接口不需要 Basic Auth 也可以通过安全过滤链。
+     */
+    @Test
+    void listSyncTasksAllowsLocalManualCallWithoutBasicAuth() throws Exception {
+        when(syncService.listSyncTasks(1, 20, "FAILED")).thenReturn(new LotterySyncTaskPageResponse(
+                1,
+                20,
+                0L,
+                0,
+                "FAILED",
+                List.of()));
+
+        mockMvc.perform(post("/api/admin/draws/sync/tasks")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "pageNo": 1,
+                                    "pageSize": 20,
+                                    "status": "FAILED"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.status").value("FAILED"));
+    }
+
+    /**
+     * 验证本地管理端失败任务重试接口不需要 Basic Auth 也可以通过安全过滤链。
+     */
+    @Test
+    void retrySyncTaskAllowsLocalManualCallWithoutBasicAuth() throws Exception {
+        when(syncService.retryHistorySync("DLT-HISTORY-FAILED-001", "ADMIN"))
+                .thenReturn(new LotteryDrawSyncResult(
+                        "DLT-HISTORY-RETRY-001",
+                        "DLT",
+                        null,
+                        "PENDING",
+                        0,
+                        0,
+                        0));
+
+        mockMvc.perform(post("/api/admin/draws/sync/tasks/DLT-HISTORY-FAILED-001/retry"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("PENDING"));

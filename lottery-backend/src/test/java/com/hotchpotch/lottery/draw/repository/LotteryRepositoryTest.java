@@ -105,6 +105,21 @@ class LotteryRepositoryTest {
         verify(mapper).selectOne(anySyncTaskWrapper());
     }
 
+    @Test
+    void syncTaskRepositoryListsTasksByStatusAndCountsTotal() {
+        LotterySyncTaskMapper mapper = mock(LotterySyncTaskMapper.class);
+        LotterySyncTask task = new LotterySyncTask();
+        when(mapper.selectList(anySyncTaskWrapper())).thenReturn(List.of(task));
+        when(mapper.selectCount(anySyncTaskWrapper())).thenReturn(1L);
+
+        LotterySyncTaskRepository repository = new LotterySyncTaskRepository(mapper);
+
+        assertThat(repository.findPageByStatus("FAILED", 1, 20)).containsExactly(task);
+        assertThat(repository.countByStatus("FAILED")).isEqualTo(1L);
+        verify(mapper).selectList(anySyncTaskWrapper());
+        verify(mapper).selectCount(anySyncTaskWrapper());
+    }
+
     private Wrapper<LotteryDraw> anyDrawWrapper() {
         return any();
     }

@@ -4,6 +4,8 @@ import com.hotchpotch.lottery.common.response.ApiResponse;
 import com.hotchpotch.lottery.config.SyncProperties;
 import com.hotchpotch.lottery.draw.record.LotteryDrawSyncResult;
 import com.hotchpotch.lottery.draw.record.LotteryHistorySyncRequest;
+import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageRequest;
+import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageResponse;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskResponse;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncAsyncService;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncService;
@@ -92,6 +94,28 @@ public class AdminDrawSyncController {
     @GetMapping("/tasks/{taskNo}")
     public ApiResponse<LotterySyncTaskResponse> getSyncTask(@PathVariable String taskNo) {
         return ApiResponse.success(syncService.findSyncTask(taskNo));
+    }
+
+    /**
+     * 分页查询同步任务列表，可按状态筛选。
+     */
+    @PostMapping("/tasks")
+    public ApiResponse<LotterySyncTaskPageResponse> listSyncTasks(
+            @RequestBody(required = false) LotterySyncTaskPageRequest request) {
+        int resolvedPageNo = defaultIfNull(request == null ? null : request.pageNo(), 1);
+        int resolvedPageSize = defaultIfNull(request == null ? null : request.pageSize(), 20);
+        String resolvedStatus = request == null ? null : request.status();
+        return ApiResponse.success(syncService.listSyncTasks(resolvedPageNo, resolvedPageSize, resolvedStatus));
+    }
+
+    /**
+     * 从失败页重试历史同步任务，并立即返回新的任务编号。
+     */
+    @PostMapping("/tasks/{taskNo}/retry")
+    public ApiResponse<LotteryDrawSyncResult> retrySyncTask(@PathVariable String taskNo) {
+        LotteryDrawSyncResult result = syncService.retryHistorySync(taskNo, TRIGGER_SOURCE_ADMIN);
+        syncAsyncService.runHistoryTask(result.taskNo());
+        return ApiResponse.success(result);
     }
 
     /**
