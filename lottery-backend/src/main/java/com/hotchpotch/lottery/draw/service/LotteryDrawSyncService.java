@@ -723,6 +723,17 @@ public class LotteryDrawSyncService {
     }
 
     /**
+     * 将请求参数 JSON 转换为前端更易使用的键值映射。
+     */
+    private Map<String, String> requestParamMap(String requestParams) {
+        if (requestParams == null || requestParams.isBlank()) {
+            return Map.of();
+        }
+
+        return parseFlatJsonObject(requestParams);
+    }
+
+    /**
      * 解析同步任务内部生成的扁平 JSON 请求参数。
      */
     private Map<String, String> parseFlatJsonObject(String json) {
@@ -1138,6 +1149,7 @@ public class LotteryDrawSyncService {
                 task.getTriggerSource(),
                 task.getStatus(),
                 task.getRequestParams(),
+                requestParamMap(task.getRequestParams()),
                 task.getStartPage(),
                 task.getCurrentPage(),
                 task.getLastSuccessPage(),

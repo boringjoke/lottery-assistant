@@ -18,6 +18,7 @@ import com.hotchpotch.lottery.draw.service.LotteryDrawSyncTaskService;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncService;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -328,6 +329,7 @@ class AdminDrawSyncControllerTest {
                 "ADMIN",
                 "RUNNING",
                 "{\"startPage\":1,\"pageSize\":20}",
+                Map.of("startPage", "1", "pageSize", "20"),
                 1,
                 3,
                 2,
@@ -354,6 +356,8 @@ class AdminDrawSyncControllerTest {
                 .andExpect(jsonPath("$.data.syncType").value("HISTORY"))
                 .andExpect(jsonPath("$.data.status").value("RUNNING"))
                 .andExpect(jsonPath("$.data.requestParams").value("{\"startPage\":1,\"pageSize\":20}"))
+                .andExpect(jsonPath("$.data.requestParamMap.startPage").value("1"))
+                .andExpect(jsonPath("$.data.requestParamMap.pageSize").value("20"))
                 .andExpect(jsonPath("$.data.currentPage").value(3))
                 .andExpect(jsonPath("$.data.lastSuccessPage").value(2))
                 .andExpect(jsonPath("$.data.successCount").value(40));
@@ -375,6 +379,7 @@ class AdminDrawSyncControllerTest {
                 "ADMIN",
                 "FAILED",
                 "{\"startPage\":1,\"pageSize\":20}",
+                Map.of("startPage", "1", "pageSize", "20"),
                 1,
                 3,
                 2,
@@ -419,6 +424,8 @@ class AdminDrawSyncControllerTest {
                 .andExpect(jsonPath("$.data.tasks[0].taskNo").value("DLT-HISTORY-FAILED-001"))
                 .andExpect(jsonPath("$.data.tasks[0].status").value("FAILED"))
                 .andExpect(jsonPath("$.data.tasks[0].requestParams").value("{\"startPage\":1,\"pageSize\":20}"))
+                .andExpect(jsonPath("$.data.tasks[0].requestParamMap.startPage").value("1"))
+                .andExpect(jsonPath("$.data.tasks[0].requestParamMap.pageSize").value("20"))
                 .andExpect(jsonPath("$.data.tasks[0].failedPage").value(3));
 
         verify(syncService).listSyncTasks(1, 20, "FAILED");

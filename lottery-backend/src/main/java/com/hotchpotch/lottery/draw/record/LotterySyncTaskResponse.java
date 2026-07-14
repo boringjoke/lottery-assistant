@@ -1,6 +1,7 @@
 package com.hotchpotch.lottery.draw.record;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 
 /**
  * 开奖同步任务进度响应。
@@ -11,6 +12,7 @@ import java.time.LocalDateTime;
  * @param triggerSource 触发来源
  * @param status 同步任务状态
  * @param requestParams 同步任务请求参数
+ * @param requestParamMap 同步任务请求参数键值映射，便于前端直接渲染
  * @param startPage 历史同步起始页码
  * @param currentPage 当前同步页码
  * @param lastSuccessPage 最后成功同步页码
@@ -33,6 +35,7 @@ public record LotterySyncTaskResponse(
         String triggerSource,
         String status,
         String requestParams,
+        Map<String, String> requestParamMap,
         Integer startPage,
         Integer currentPage,
         Integer lastSuccessPage,

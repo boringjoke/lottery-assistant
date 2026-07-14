@@ -745,6 +745,10 @@ class LotteryDrawSyncServiceTest {
         assertThat(response.tasks()).hasSize(1);
         assertThat(response.tasks().get(0).taskNo()).isEqualTo("DLT-HISTORY-FAILED-001");
         assertThat(response.tasks().get(0).failedPage()).isEqualTo(3);
+        assertThat(response.tasks().get(0).requestParamMap())
+                .containsEntry("startPage", "1")
+                .containsEntry("pageSize", "2")
+                .containsEntry("maxPages", "2");
         verify(syncTaskRepository).countByStatus("FAILED");
         verify(syncTaskRepository).findPageByStatus("FAILED", 1, 20);
     }
@@ -1047,6 +1051,8 @@ class LotteryDrawSyncServiceTest {
         task.setSyncType("HISTORY");
         task.setTriggerSource("ADMIN");
         task.setStatus("PENDING");
+        task.setRequestParams("{\"startPage\":1,\"pageSize\":2,\"maxPages\":2,"
+                + "\"pageDelayMillis\":0,\"stopWhenLastPage\":true}");
         task.setStartPage(1);
         task.setPageSize(2);
         task.setMaxPages(2);
