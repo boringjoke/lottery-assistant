@@ -1,7 +1,9 @@
 package com.hotchpotch.lottery.draw.controller;
 
+import com.hotchpotch.lottery.common.constant.PageConstants;
 import com.hotchpotch.lottery.common.response.ApiResponse;
 import com.hotchpotch.lottery.config.SyncProperties;
+import com.hotchpotch.lottery.draw.enums.LotterySyncTriggerSource;
 import com.hotchpotch.lottery.draw.record.LotteryDrawSyncResult;
 import com.hotchpotch.lottery.draw.record.LotteryHistorySyncRequest;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageRequest;
@@ -24,8 +26,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/admin/draws/sync")
 public class AdminDrawSyncController {
 
-    private static final String TRIGGER_SOURCE_ADMIN = "ADMIN";
-
     private final LotteryDrawSyncService syncService;
     private final LotteryDrawSyncAsyncService syncAsyncService;
     private final SyncProperties syncProperties;
@@ -47,7 +47,7 @@ public class AdminDrawSyncController {
      */
     @PostMapping("/latest")
     public ApiResponse<LotteryDrawSyncResult> syncLatestDraw() {
-        return ApiResponse.success(syncService.syncLatestDraw(TRIGGER_SOURCE_ADMIN));
+        return ApiResponse.success(syncService.syncLatestDraw(LotterySyncTriggerSource.ADMIN.code()));
     }
 
     /**
@@ -55,9 +55,12 @@ public class AdminDrawSyncController {
      */
     @PostMapping("/historyPage")
     public ApiResponse<LotteryDrawSyncResult> syncHistoryPage(
-            @RequestParam(defaultValue = "1") int pageNo,
-            @RequestParam(defaultValue = "20") int pageSize) {
-        return ApiResponse.success(syncService.syncHistoryPage(pageNo, pageSize, TRIGGER_SOURCE_ADMIN));
+            @RequestParam(defaultValue = PageConstants.DEFAULT_PAGE_NO_TEXT) int pageNo,
+            @RequestParam(defaultValue = PageConstants.DEFAULT_PAGE_SIZE_TEXT) int pageSize) {
+        return ApiResponse.success(syncService.syncHistoryPage(
+                pageNo,
+                pageSize,
+                LotterySyncTriggerSource.ADMIN.code()));
     }
 
     /**
@@ -66,8 +69,12 @@ public class AdminDrawSyncController {
     @PostMapping("/history")
     public ApiResponse<LotteryDrawSyncResult> syncHistory(
             @RequestBody(required = false) LotteryHistorySyncRequest request) {
-        int resolvedStartPage = defaultIfNull(request == null ? null : request.startPage(), 1);
-        int resolvedPageSize = defaultIfNull(request == null ? null : request.pageSize(), 20);
+        int resolvedStartPage = defaultIfNull(
+                request == null ? null : request.startPage(),
+                PageConstants.DEFAULT_PAGE_NO);
+        int resolvedPageSize = defaultIfNull(
+                request == null ? null : request.pageSize(),
+                PageConstants.DEFAULT_PAGE_SIZE);
         int resolvedMaxPages = Math.min(
                 defaultIfNull(request == null ? null : request.maxPages(), syncProperties.maxPagesPerTask()),
                 syncProperties.maxPagesPerTask());
@@ -83,7 +90,7 @@ public class AdminDrawSyncController {
                 resolvedMaxPages,
                 resolvedPageDelayMillis,
                 resolvedStopWhenLastPage,
-                TRIGGER_SOURCE_ADMIN);
+                LotterySyncTriggerSource.ADMIN.code());
         syncAsyncService.runHistoryTask(result.taskNo());
         return ApiResponse.success(result);
     }
@@ -102,8 +109,12 @@ public class AdminDrawSyncController {
     @PostMapping("/tasks")
     public ApiResponse<LotterySyncTaskPageResponse> listSyncTasks(
             @RequestBody(required = false) LotterySyncTaskPageRequest request) {
-        int resolvedPageNo = defaultIfNull(request == null ? null : request.pageNo(), 1);
-        int resolvedPageSize = defaultIfNull(request == null ? null : request.pageSize(), 20);
+        int resolvedPageNo = defaultIfNull(
+                request == null ? null : request.pageNo(),
+                PageConstants.DEFAULT_PAGE_NO);
+        int resolvedPageSize = defaultIfNull(
+                request == null ? null : request.pageSize(),
+                PageConstants.DEFAULT_PAGE_SIZE);
         String resolvedStatus = request == null ? null : request.status();
         return ApiResponse.success(syncService.listSyncTasks(resolvedPageNo, resolvedPageSize, resolvedStatus));
     }
@@ -113,7 +124,9 @@ public class AdminDrawSyncController {
      */
     @PostMapping("/tasks/{taskNo}/retry")
     public ApiResponse<LotteryDrawSyncResult> retrySyncTask(@PathVariable String taskNo) {
-        LotteryDrawSyncResult result = syncService.retryHistorySync(taskNo, TRIGGER_SOURCE_ADMIN);
+        LotteryDrawSyncResult result = syncService.retryHistorySync(
+                taskNo,
+                LotterySyncTriggerSource.ADMIN.code());
         syncAsyncService.runHistoryTask(result.taskNo());
         return ApiResponse.success(result);
     }

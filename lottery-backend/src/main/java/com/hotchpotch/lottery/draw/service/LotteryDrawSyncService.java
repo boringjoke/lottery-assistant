@@ -1,5 +1,6 @@
 package com.hotchpotch.lottery.draw.service;
 
+import com.hotchpotch.lottery.common.constant.PageConstants;
 import com.hotchpotch.lottery.common.exception.BusinessException;
 import com.hotchpotch.lottery.common.exception.ErrorCode;
 import com.hotchpotch.lottery.crawler.client.SportteryCrawlerClient;
@@ -10,6 +11,9 @@ import com.hotchpotch.lottery.crawler.record.CrawlerPrizeTierResponse;
 import com.hotchpotch.lottery.draw.entity.LotteryDraw;
 import com.hotchpotch.lottery.draw.entity.LotteryPrizeTier;
 import com.hotchpotch.lottery.draw.entity.LotterySyncTask;
+import com.hotchpotch.lottery.draw.enums.LotterySyncType;
+import com.hotchpotch.lottery.draw.enums.LotterySyncTaskStatus;
+import com.hotchpotch.lottery.draw.enums.LotteryType;
 import com.hotchpotch.lottery.draw.record.LotteryDrawSyncResult;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageResponse;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskResponse;
@@ -33,20 +37,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class LotteryDrawSyncService {
 
-    private static final String SYNC_TYPE_LATEST = "LATEST";
-    private static final String SYNC_TYPE_HISTORY_PAGE = "HISTORY_PAGE";
-    private static final String SYNC_TYPE_HISTORY = "HISTORY";
-    private static final String STATUS_PENDING = "PENDING";
-    private static final String STATUS_RUNNING = "RUNNING";
-    private static final String STATUS_SUCCESS = "SUCCESS";
-    private static final String STATUS_FAILED = "FAILED";
-    private static final String STATUS_RETRIED = "RETRIED";
-    private static final String DEFAULT_LOTTERY_TYPE = "DLT";
     private static final String LATEST_REQUEST_PARAMS = "{\"source\":\"crawler.latest\"}";
     private static final int FAILURE_REASON_MAX_LENGTH = 1000;
-    private static final int DEFAULT_PAGE_NO = 1;
-    private static final int DEFAULT_PAGE_SIZE = 20;
-    private static final int MAX_PAGE_SIZE = 100;
 
     private final SportteryCrawlerClient crawlerClient;
     private final LotteryDrawRepository drawRepository;
@@ -71,7 +63,10 @@ public class LotteryDrawSyncService {
      * 同步 crawler 返回的最新一期大乐透开奖。
      */
     public LotteryDrawSyncResult syncLatestDraw(String triggerSource) {
-        LotterySyncTask task = createRunningTask(SYNC_TYPE_LATEST, triggerSource, LATEST_REQUEST_PARAMS);
+        LotterySyncTask task = createRunningTask(
+                LotterySyncType.LATEST.code(),
+                triggerSource,
+                LATEST_REQUEST_PARAMS);
         syncTaskRepository.insert(task);
 
         try {
@@ -91,7 +86,7 @@ public class LotteryDrawSyncService {
      */
     public LotteryDrawSyncResult syncHistoryPage(int pageNo, int pageSize, String triggerSource) {
         LotterySyncTask task = createRunningTask(
-                SYNC_TYPE_HISTORY_PAGE,
+                LotterySyncType.HISTORY_PAGE.code(),
                 triggerSource,
                 historyPageRequestParams(pageNo, pageSize));
         syncTaskRepository.insert(task);
@@ -99,7 +94,7 @@ public class LotteryDrawSyncService {
         try {
             SyncCounter counter = syncHistoryPageDraws(pageNo, pageSize);
             markSuccess(task, counter.successCount, counter.skippedCount);
-            return result(task, DEFAULT_LOTTERY_TYPE, null);
+            return result(task, LotteryType.DLT.code(), null);
         } catch (RuntimeException ex) {
             markFailed(task, ex);
             throw ex;
@@ -125,7 +120,7 @@ public class LotteryDrawSyncService {
                 stopWhenLastPage,
                 triggerSource);
         syncTaskRepository.insert(task);
-        return result(task, DEFAULT_LOTTERY_TYPE, null);
+        return result(task, LotteryType.DLT.code(), null);
     }
 
     /**
@@ -139,14 +134,14 @@ public class LotteryDrawSyncService {
 
         LotterySyncTask retryTask = createPendingHistoryTask(
                 failedTask.getFailedPage(),
-                defaultIfNull(failedTask.getPageSize(), 20),
+                defaultIfNull(failedTask.getPageSize(), PageConstants.DEFAULT_PAGE_SIZE),
                 defaultIfNull(failedTask.getMaxPages(), 1),
                 defaultIfNull(failedTask.getPageDelayMillis(), 0),
                 !Boolean.FALSE.equals(failedTask.getStopWhenLastPage()),
                 triggerSource);
         syncTaskRepository.insert(retryTask);
         markRetried(failedTask);
-        return result(retryTask, DEFAULT_LOTTERY_TYPE, null);
+        return result(retryTask, LotteryType.DLT.code(), null);
     }
 
     /**
@@ -155,15 +150,15 @@ public class LotteryDrawSyncService {
     public void runHistoryTask(String taskNo) {
         LotterySyncTask task = syncTaskRepository.findByTaskNo(taskNo)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "同步任务不存在"));
-        task.setStatus(STATUS_RUNNING);
+        task.setStatus(LotterySyncTaskStatus.RUNNING.code());
         task.setStartTime(LocalDateTime.now());
         task.setFailureReason(null);
         syncTaskRepository.updateById(task);
 
         int successCount = zeroIfNull(task.getSuccessCount());
         int skippedCount = zeroIfNull(task.getSkippedCount());
-        int startPage = defaultIfNull(task.getStartPage(), 1);
-        int pageSize = defaultIfNull(task.getPageSize(), 20);
+        int startPage = defaultIfNull(task.getStartPage(), PageConstants.DEFAULT_PAGE_NO);
+        int pageSize = defaultIfNull(task.getPageSize(), PageConstants.DEFAULT_PAGE_SIZE);
         int maxPages = defaultIfNull(task.getMaxPages(), 1);
         int pageDelayMillis = defaultIfNull(task.getPageDelayMillis(), 0);
         boolean stopWhenLastPage = !Boolean.FALSE.equals(task.getStopWhenLastPage());
@@ -240,11 +235,11 @@ public class LotteryDrawSyncService {
     private LotterySyncTask createRunningTask(String syncType, String triggerSource, String requestParams) {
         LocalDateTime now = LocalDateTime.now();
         LotterySyncTask task = new LotterySyncTask();
-        task.setTaskNo("DLT-" + syncType + "-" + UUID.randomUUID());
-        task.setLotteryType(DEFAULT_LOTTERY_TYPE);
+        task.setTaskNo(LotteryType.DLT.code() + "-" + syncType + "-" + UUID.randomUUID());
+        task.setLotteryType(LotteryType.DLT.code());
         task.setSyncType(syncType);
         task.setTriggerSource(triggerSource);
-        task.setStatus(STATUS_RUNNING);
+        task.setStatus(LotterySyncTaskStatus.RUNNING.code());
         task.setRequestParams(requestParams);
         task.setSuccessCount(0);
         task.setSkippedCount(0);
@@ -264,11 +259,11 @@ public class LotteryDrawSyncService {
             boolean stopWhenLastPage,
             String triggerSource) {
         LotterySyncTask task = new LotterySyncTask();
-        task.setTaskNo("DLT-" + SYNC_TYPE_HISTORY + "-" + UUID.randomUUID());
-        task.setLotteryType(DEFAULT_LOTTERY_TYPE);
-        task.setSyncType(SYNC_TYPE_HISTORY);
+        task.setTaskNo(LotteryType.DLT.code() + "-" + LotterySyncType.HISTORY.code() + "-" + UUID.randomUUID());
+        task.setLotteryType(LotteryType.DLT.code());
+        task.setSyncType(LotterySyncType.HISTORY.code());
         task.setTriggerSource(triggerSource);
-        task.setStatus(STATUS_PENDING);
+        task.setStatus(LotterySyncTaskStatus.PENDING.code());
         task.setRequestParams(historyRequestParams(startPage, pageSize, maxPages, pageDelayMillis, stopWhenLastPage));
         task.setStartPage(startPage);
         task.setPageSize(pageSize);
@@ -294,7 +289,8 @@ public class LotteryDrawSyncService {
      * 校验历史同步任务是否可以重试。
      */
     private void validateRetryableHistoryTask(LotterySyncTask task) {
-        if (!SYNC_TYPE_HISTORY.equals(task.getSyncType()) || !STATUS_FAILED.equals(task.getStatus())) {
+        if (!LotterySyncType.HISTORY.code().equals(task.getSyncType())
+                || !LotterySyncTaskStatus.FAILED.code().equals(task.getStatus())) {
             throw new BusinessException(ErrorCode.INVALID_REQUEST, "只有失败的历史同步任务可以重试");
         }
         if (task.getFailedPage() == null || task.getFailedPage() < 1) {
@@ -518,7 +514,7 @@ public class LotteryDrawSyncService {
      * 将同步任务标记为成功，并写入成功和跳过数量。
      */
     private void markSuccess(LotterySyncTask task, int successCount, int skippedCount) {
-        task.setStatus(STATUS_SUCCESS);
+        task.setStatus(LotterySyncTaskStatus.SUCCESS.code());
         task.setSuccessCount(successCount);
         task.setSkippedCount(skippedCount);
         task.setFailedCount(0);
@@ -544,7 +540,7 @@ public class LotteryDrawSyncService {
             int skippedCount,
             int failedCount,
             RuntimeException ex) {
-        task.setStatus(STATUS_FAILED);
+        task.setStatus(LotterySyncTaskStatus.FAILED.code());
         task.setSuccessCount(successCount);
         task.setSkippedCount(skippedCount);
         task.setFailedCount(failedCount);
@@ -557,7 +553,7 @@ public class LotteryDrawSyncService {
      * 将原失败任务标记为已发起重试，避免重复创建重试任务。
      */
     private void markRetried(LotterySyncTask task) {
-        task.setStatus(STATUS_RETRIED);
+        task.setStatus(LotterySyncTaskStatus.RETRIED.code());
         syncTaskRepository.updateById(task);
     }
 
@@ -654,7 +650,7 @@ public class LotteryDrawSyncService {
      * 将页码归一化为从 1 开始的有效页码。
      */
     private int normalizePageNo(int pageNo) {
-        return pageNo <= 0 ? DEFAULT_PAGE_NO : pageNo;
+        return pageNo <= 0 ? PageConstants.DEFAULT_PAGE_NO : pageNo;
     }
 
     /**
@@ -662,10 +658,10 @@ public class LotteryDrawSyncService {
      */
     private int normalizePageSize(int pageSize) {
         if (pageSize <= 0) {
-            return DEFAULT_PAGE_SIZE;
+            return PageConstants.DEFAULT_PAGE_SIZE;
         }
 
-        return Math.min(pageSize, MAX_PAGE_SIZE);
+        return Math.min(pageSize, PageConstants.MAX_PAGE_SIZE);
     }
 
     /**

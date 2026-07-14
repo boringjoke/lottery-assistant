@@ -1,5 +1,6 @@
 package com.hotchpotch.lottery.draw.controller;
 
+import com.hotchpotch.lottery.common.constant.PageConstants;
 import com.hotchpotch.lottery.common.response.ApiResponse;
 import com.hotchpotch.lottery.draw.record.LotteryDrawDetailResponse;
 import com.hotchpotch.lottery.draw.record.LotteryDrawPageResponse;
@@ -39,8 +40,8 @@ public class LotteryDrawQueryController {
      */
     @GetMapping
     public ApiResponse<LotteryDrawPageResponse> listDltDraws(
-            @RequestParam(defaultValue = "1") int pageNo,
-            @RequestParam(defaultValue = "20") int pageSize) {
+            @RequestParam(defaultValue = PageConstants.DEFAULT_PAGE_NO_TEXT) int pageNo,
+            @RequestParam(defaultValue = PageConstants.DEFAULT_PAGE_SIZE_TEXT) int pageSize) {
         return ApiResponse.success(queryService.listDltDraws(pageNo, pageSize));
     }
 

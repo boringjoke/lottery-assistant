@@ -28,15 +28,15 @@ public class LotterySyncTask {
     @TableField("lottery_type")
     private String lotteryType;
 
-    /** 同步类型：LATEST、ISSUE_RANGE、HISTORY_PAGE。 */
+    /** 同步类型，取值见 LotterySyncType。 */
     @TableField("sync_type")
     private String syncType;
 
-    /** 触发来源：ADMIN、SYSTEM。 */
+    /** 触发来源，取值见 LotterySyncTriggerSource。 */
     @TableField("trigger_source")
     private String triggerSource;
 
-    /** 任务状态：PENDING、RUNNING、SUCCESS、PARTIAL_SUCCESS、FAILED、RETRIED。 */
+    /** 任务状态，取值见 LotterySyncTaskStatus。 */
     @TableField("status")
     private String status;
 
