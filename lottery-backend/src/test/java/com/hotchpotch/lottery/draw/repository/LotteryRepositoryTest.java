@@ -60,8 +60,9 @@ class LotteryRepositoryTest {
         LotteryDrawRepository repository = new LotteryDrawRepository(mapper);
 
         assertThat(repository.findPageByLotteryType("DLT", 1, 20)).containsExactly(draw);
+        assertThat(repository.findAllByLotteryType("DLT")).containsExactly(draw);
         assertThat(repository.countByLotteryType("DLT")).isEqualTo(1L);
-        verify(mapper).selectList(anyDrawWrapper());
+        org.mockito.Mockito.verify(mapper, org.mockito.Mockito.times(2)).selectList(anyDrawWrapper());
         verify(mapper).selectCount(anyDrawWrapper());
     }
 

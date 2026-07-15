@@ -59,6 +59,16 @@ public class LotteryDrawRepository {
     }
 
     /**
+     * 按彩票类型查询全部开奖记录，按开奖日期和期号倒序返回。
+     */
+    public List<LotteryDraw> findAllByLotteryType(String lotteryType) {
+        return lotteryDrawMapper.selectList(Wrappers.<LotteryDraw>lambdaQuery()
+                .eq(LotteryDraw::getLotteryType, lotteryType)
+                .orderByDesc(LotteryDraw::getDrawDate)
+                .orderByDesc(LotteryDraw::getIssueNo));
+    }
+
+    /**
      * 按彩票类型统计开奖记录总数。
      */
     public Long countByLotteryType(String lotteryType) {
