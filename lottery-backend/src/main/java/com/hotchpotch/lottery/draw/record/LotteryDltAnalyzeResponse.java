@@ -6,6 +6,7 @@ import java.util.List;
  * 大乐透号码分析响应。
  *
  * @param totalNumberCount 分析号码总注数
+ * @param analyzedDrawCount 本次参与分析的历史开奖期数
  * @param winningNumberCount 存在中奖记录的注数
  * @param winningHitCount 中奖记录总次数
  * @param bestPrizeLevel 全部号码中的最高奖级序号，未中奖时为空
@@ -14,6 +15,7 @@ import java.util.List;
  */
 public record LotteryDltAnalyzeResponse(
         int totalNumberCount,
+        int analyzedDrawCount,
         int winningNumberCount,
         int winningHitCount,
         Integer bestPrizeLevel,

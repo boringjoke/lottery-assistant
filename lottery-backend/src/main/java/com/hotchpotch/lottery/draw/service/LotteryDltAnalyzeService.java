@@ -74,6 +74,7 @@ public class LotteryDltAnalyzeService {
 
         return new LotteryDltAnalyzeResponse(
                 results.size(),
+                draws.size(),
                 winningNumberCount,
                 winningHitCount,
                 bestPrizeLevel,

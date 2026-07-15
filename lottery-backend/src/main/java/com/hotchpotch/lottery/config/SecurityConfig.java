@@ -20,7 +20,12 @@ public class SecurityConfig {
         return http
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers("/api/admin/draws/sync/**", "/api/draws/**", "/error").permitAll()
+                        .requestMatchers(
+                                "/api/admin/draws/sync/**",
+                                "/api/draws/**",
+                                "/api/lottery/**",
+                                "/error")
+                        .permitAll()
                         .anyRequest().authenticated())
                 .httpBasic(Customizer.withDefaults())
                 .formLogin(Customizer.withDefaults())

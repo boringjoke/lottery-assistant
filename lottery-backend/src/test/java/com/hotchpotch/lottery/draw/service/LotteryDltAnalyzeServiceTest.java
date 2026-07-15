@@ -29,6 +29,7 @@ class LotteryDltAnalyzeServiceTest {
                 "01 05 12 23 35 + 03 11")));
 
         assertThat(response.totalNumberCount()).isEqualTo(1);
+        assertThat(response.analyzedDrawCount()).isEqualTo(1);
         assertThat(response.winningNumberCount()).isEqualTo(1);
         assertThat(response.winningHitCount()).isEqualTo(1);
         assertThat(response.bestPrizeLevel()).isEqualTo(1);
@@ -57,6 +58,7 @@ class LotteryDltAnalyzeServiceTest {
                 "06 07 08 09 10 + 01 02")));
 
         assertThat(response.totalNumberCount()).isEqualTo(1);
+        assertThat(response.analyzedDrawCount()).isEqualTo(1);
         assertThat(response.winningNumberCount()).isZero();
         assertThat(response.winningHitCount()).isZero();
         assertThat(response.bestPrizeLevel()).isNull();
@@ -81,6 +83,7 @@ class LotteryDltAnalyzeServiceTest {
                 "01 05 12 23 30 + 03 09")));
 
         assertThat(response.totalNumberCount()).isEqualTo(2);
+        assertThat(response.analyzedDrawCount()).isEqualTo(2);
         assertThat(response.winningNumberCount()).isEqualTo(2);
         assertThat(response.winningHitCount()).isEqualTo(4);
         assertThat(response.bestPrizeLevel()).isEqualTo(1);
@@ -103,6 +106,7 @@ class LotteryDltAnalyzeServiceTest {
                 "01 05 12 23 35 + 03 11")));
 
         assertThat(response.totalNumberCount()).isEqualTo(1);
+        assertThat(response.analyzedDrawCount()).isZero();
         assertThat(response.winningNumberCount()).isZero();
         assertThat(response.winningHitCount()).isZero();
         assertThat(response.results().get(0).hitDetails()).isEmpty();
