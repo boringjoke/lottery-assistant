@@ -1,6 +1,7 @@
 package com.hotchpotch.lottery.draw.controller;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -64,7 +65,9 @@ class LotteryDrawQueryControllerTest {
     @Test
     void listDltDrawsReturnsPageResponse() throws Exception {
         LotteryDrawQueryService queryService = mock(LotteryDrawQueryService.class);
-        when(queryService.listDltDraws(1, 20)).thenReturn(new LotteryDrawPageResponse(
+        LocalDate startDate = LocalDate.of(2026, 7, 1);
+        LocalDate endDate = LocalDate.of(2026, 7, 31);
+        when(queryService.listDltDraws(1, 20, "26076", startDate, endDate)).thenReturn(new LotteryDrawPageResponse(
                 1,
                 20,
                 1L,
@@ -76,10 +79,14 @@ class LotteryDrawQueryControllerTest {
 
         mockMvc.perform(get("/api/draws/dlt")
                         .param("pageNo", "1")
-                        .param("pageSize", "20"))
+                        .param("pageSize", "20")
+                        .param("issueNo", "26076")
+                        .param("startDate", "2026-07-01")
+                        .param("endDate", "2026-07-31"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.pageNo").value(1))
                 .andExpect(jsonPath("$.data.draws[0].issueNo").value("26076"));
+        verify(queryService).listDltDraws(1, 20, "26076", startDate, endDate);
     }
 
     private LotteryDrawDetailResponse sampleDetail() {

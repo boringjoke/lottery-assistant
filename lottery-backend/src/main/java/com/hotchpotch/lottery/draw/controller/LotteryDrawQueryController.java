@@ -5,6 +5,8 @@ import com.hotchpotch.lottery.common.response.ApiResponse;
 import com.hotchpotch.lottery.draw.record.LotteryDrawDetailResponse;
 import com.hotchpotch.lottery.draw.record.LotteryDrawPageResponse;
 import com.hotchpotch.lottery.draw.service.LotteryDrawQueryService;
+import java.time.LocalDate;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -41,8 +43,11 @@ public class LotteryDrawQueryController {
     @GetMapping
     public ApiResponse<LotteryDrawPageResponse> listDltDraws(
             @RequestParam(defaultValue = PageConstants.DEFAULT_PAGE_NO_TEXT) int pageNo,
-            @RequestParam(defaultValue = PageConstants.DEFAULT_PAGE_SIZE_TEXT) int pageSize) {
-        return ApiResponse.success(queryService.listDltDraws(pageNo, pageSize));
+            @RequestParam(defaultValue = PageConstants.DEFAULT_PAGE_SIZE_TEXT) int pageSize,
+            @RequestParam(required = false) String issueNo,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
+        return ApiResponse.success(queryService.listDltDraws(pageNo, pageSize, issueNo, startDate, endDate));
     }
 
     /**

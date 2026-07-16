@@ -72,8 +72,8 @@ class LotteryDrawQueryServiceTest {
         LotteryPrizeTierRepository prizeTierRepository = mock(LotteryPrizeTierRepository.class);
         LotteryDrawQueryService service = new LotteryDrawQueryService(drawRepository, prizeTierRepository);
 
-        when(drawRepository.findPageByLotteryType("DLT", 2, 10)).thenReturn(List.of(sampleDraw()));
-        when(drawRepository.countByLotteryType("DLT")).thenReturn(11L);
+        when(drawRepository.findPageByQuery("DLT", null, null, null, 2, 10)).thenReturn(List.of(sampleDraw()));
+        when(drawRepository.countByQuery("DLT", null, null, null)).thenReturn(11L);
 
         LotteryDrawPageResponse response = service.listDltDraws(2, 10);
 
@@ -83,6 +83,49 @@ class LotteryDrawQueryServiceTest {
         assertThat(response.pages()).isEqualTo(2);
         assertThat(response.draws()).hasSize(1);
         assertThat(response.draws().get(0).issueNo()).isEqualTo("26076");
+    }
+
+    /**
+     * 验证历史开奖列表会将期号和日期范围筛选条件传递给仓储。
+     */
+    @Test
+    void listDltDrawsReturnsFilteredPageResponse() {
+        LotteryDrawRepository drawRepository = mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = mock(LotteryPrizeTierRepository.class);
+        LotteryDrawQueryService service = new LotteryDrawQueryService(drawRepository, prizeTierRepository);
+        LocalDate startDate = LocalDate.of(2026, 7, 1);
+        LocalDate endDate = LocalDate.of(2026, 7, 31);
+
+        when(drawRepository.findPageByQuery("DLT", "26076", startDate, endDate, 1, 20))
+                .thenReturn(List.of(sampleDraw()));
+        when(drawRepository.countByQuery("DLT", "26076", startDate, endDate)).thenReturn(1L);
+
+        LotteryDrawPageResponse response = service.listDltDraws(1, 20, "26076", startDate, endDate);
+
+        assertThat(response.total()).isEqualTo(1L);
+        assertThat(response.pages()).isEqualTo(1);
+        assertThat(response.draws()).hasSize(1);
+    }
+
+    /**
+     * 验证开始日期晚于结束日期时拒绝查询。
+     */
+    @Test
+    void listDltDrawsThrowsInvalidRequestWhenDateRangeInvalid() {
+        LotteryDrawRepository drawRepository = mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = mock(LotteryPrizeTierRepository.class);
+        LotteryDrawQueryService service = new LotteryDrawQueryService(drawRepository, prizeTierRepository);
+
+        assertThatThrownBy(() -> service.listDltDraws(
+                1,
+                20,
+                null,
+                LocalDate.of(2026, 8, 1),
+                LocalDate.of(2026, 7, 1)))
+                .isInstanceOfSatisfying(BusinessException.class, exception -> {
+                    assertThat(exception.errorCode()).isEqualTo(ErrorCode.INVALID_REQUEST);
+                    assertThat(exception.getMessage()).contains("开始日期不能晚于结束日期");
+                });
     }
 
     private LotteryDraw sampleDraw() {

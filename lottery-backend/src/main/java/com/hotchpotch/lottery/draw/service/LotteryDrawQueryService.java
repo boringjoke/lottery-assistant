@@ -12,6 +12,7 @@ import com.hotchpotch.lottery.draw.record.LotteryDrawSummaryResponse;
 import com.hotchpotch.lottery.draw.record.LotteryPrizeTierResponse;
 import com.hotchpotch.lottery.draw.repository.LotteryDrawRepository;
 import com.hotchpotch.lottery.draw.repository.LotteryPrizeTierRepository;
+import java.time.LocalDate;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -58,11 +59,24 @@ public class LotteryDrawQueryService {
      * 分页查询大乐透开奖历史摘要列表。
      */
     public LotteryDrawPageResponse listDltDraws(int pageNo, int pageSize) {
+        return listDltDraws(pageNo, pageSize, null, null, null);
+    }
+
+    /**
+     * 按期号和开奖日期范围分页查询大乐透开奖历史摘要列表。
+     */
+    public LotteryDrawPageResponse listDltDraws(
+            int pageNo,
+            int pageSize,
+            String issueNo,
+            LocalDate startDate,
+            LocalDate endDate) {
+        validateDateRange(startDate, endDate);
         int safePageNo = normalizePageNo(pageNo);
         int safePageSize = normalizePageSize(pageSize);
-        Long total = drawRepository.countByLotteryType(LotteryType.DLT.code());
+        Long total = drawRepository.countByQuery(LotteryType.DLT.code(), issueNo, startDate, endDate);
         List<LotteryDrawSummaryResponse> draws = drawRepository
-                .findPageByLotteryType(LotteryType.DLT.code(), safePageNo, safePageSize)
+                .findPageByQuery(LotteryType.DLT.code(), issueNo, startDate, endDate, safePageNo, safePageSize)
                 .stream()
                 .map(this::toSummaryResponse)
                 .toList();
@@ -73,6 +87,15 @@ public class LotteryDrawQueryService {
                 total,
                 calculatePages(total, safePageSize),
                 draws);
+    }
+
+    /**
+     * 校验开奖日期范围，避免向仓储层传入无效区间。
+     */
+    private void validateDateRange(LocalDate startDate, LocalDate endDate) {
+        if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "开始日期不能晚于结束日期");
+        }
     }
 
     /**

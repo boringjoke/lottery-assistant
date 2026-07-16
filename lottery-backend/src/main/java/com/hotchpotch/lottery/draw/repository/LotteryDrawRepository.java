@@ -1,8 +1,10 @@
 package com.hotchpotch.lottery.draw.repository;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.hotchpotch.lottery.draw.entity.LotteryDraw;
 import com.hotchpotch.lottery.draw.mapper.LotteryDrawMapper;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
@@ -47,12 +49,24 @@ public class LotteryDrawRepository {
      * 按彩票类型分页查询开奖记录，按开奖日期和期号倒序返回。
      */
     public List<LotteryDraw> findPageByLotteryType(String lotteryType, int pageNo, int pageSize) {
+        return findPageByQuery(lotteryType, null, null, null, pageNo, pageSize);
+    }
+
+    /**
+     * 按彩票类型、期号和开奖日期范围分页查询开奖记录，按开奖日期和期号倒序返回。
+     */
+    public List<LotteryDraw> findPageByQuery(
+            String lotteryType,
+            String issueNo,
+            LocalDate startDate,
+            LocalDate endDate,
+            int pageNo,
+            int pageSize) {
         int safePageNo = Math.max(pageNo, 1);
         int safePageSize = Math.max(pageSize, 1);
         int offset = (safePageNo - 1) * safePageSize;
 
-        return lotteryDrawMapper.selectList(Wrappers.<LotteryDraw>lambdaQuery()
-                .eq(LotteryDraw::getLotteryType, lotteryType)
+        return lotteryDrawMapper.selectList(basePageQuery(lotteryType, issueNo, startDate, endDate)
                 .orderByDesc(LotteryDraw::getDrawDate)
                 .orderByDesc(LotteryDraw::getIssueNo)
                 .last("LIMIT " + safePageSize + " OFFSET " + offset));
@@ -72,8 +86,37 @@ public class LotteryDrawRepository {
      * 按彩票类型统计开奖记录总数。
      */
     public Long countByLotteryType(String lotteryType) {
-        return lotteryDrawMapper.selectCount(Wrappers.<LotteryDraw>lambdaQuery()
-                .eq(LotteryDraw::getLotteryType, lotteryType));
+        return countByQuery(lotteryType, null, null, null);
+    }
+
+    /**
+     * 按彩票类型、期号和开奖日期范围统计开奖记录总数。
+     */
+    public Long countByQuery(String lotteryType, String issueNo, LocalDate startDate, LocalDate endDate) {
+        return lotteryDrawMapper.selectCount(basePageQuery(lotteryType, issueNo, startDate, endDate));
+    }
+
+    /**
+     * 构建历史开奖记录分页和统计共用查询条件。
+     */
+    private LambdaQueryWrapper<LotteryDraw> basePageQuery(
+            String lotteryType,
+            String issueNo,
+            LocalDate startDate,
+            LocalDate endDate) {
+        LambdaQueryWrapper<LotteryDraw> queryWrapper = Wrappers.<LotteryDraw>lambdaQuery()
+                .eq(LotteryDraw::getLotteryType, lotteryType);
+        if (issueNo != null && !issueNo.isBlank()) {
+            queryWrapper.eq(LotteryDraw::getIssueNo, issueNo.trim());
+        }
+        if (startDate != null) {
+            queryWrapper.ge(LotteryDraw::getDrawDate, startDate);
+        }
+        if (endDate != null) {
+            queryWrapper.le(LotteryDraw::getDrawDate, endDate);
+        }
+
+        return queryWrapper;
     }
 
     /**
