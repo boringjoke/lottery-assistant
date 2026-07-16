@@ -11,10 +11,28 @@ vi.mock('@/api/lottery', () => ({
 
 const emptyPage: LotteryDrawPage = {
   pageNo: 1,
-  pageSize: 20,
+  pageSize: 10,
   total: 0,
   pages: 0,
   draws: [],
+}
+
+const firstPage: LotteryDrawPage = {
+  pageNo: 1,
+  pageSize: 10,
+  total: 12,
+  pages: 2,
+  draws: [
+    {
+      lotteryType: 'DLT',
+      issueNo: '26076',
+      drawDate: '2026-07-15',
+      frontNumbers: '01,02,03,04,05',
+      backNumbers: '06,07',
+      poolBalance: 1000000,
+      salesAmount: 2000000,
+    },
+  ],
 }
 
 describe('HistoryTab', () => {
@@ -35,7 +53,7 @@ describe('HistoryTab', () => {
 
     expect(fetchDltDrawPage).toHaveBeenLastCalledWith({
       pageNo: 1,
-      pageSize: 20,
+      pageSize: 10,
       issueNo: '26076',
       startDate: '2026-07-01',
       endDate: '2026-07-31',
@@ -54,10 +72,32 @@ describe('HistoryTab', () => {
 
     expect(fetchDltDrawPage).toHaveBeenLastCalledWith({
       pageNo: 1,
-      pageSize: 20,
+      pageSize: 10,
       issueNo: undefined,
       startDate: undefined,
       endDate: undefined,
     })
+  })
+
+  it('keeps the current list visible while page change is loading', async () => {
+    vi.mocked(fetchDltDrawPage)
+      .mockResolvedValueOnce(firstPage)
+      .mockReturnValueOnce(new Promise(() => undefined))
+
+    const wrapper = mount(HistoryTab)
+    await flushPromises()
+
+    await wrapper.findAll('.page-button')[1]?.trigger('click')
+
+    expect(fetchDltDrawPage).toHaveBeenLastCalledWith({
+      pageNo: 2,
+      pageSize: 10,
+      issueNo: undefined,
+      startDate: undefined,
+      endDate: undefined,
+    })
+    expect(wrapper.find('table').exists()).toBe(true)
+    expect(wrapper.text()).toContain('26076')
+    expect(wrapper.text()).toContain('正在刷新开奖记录')
   })
 })

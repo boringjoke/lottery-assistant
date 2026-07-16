@@ -12,7 +12,7 @@ const emit = defineEmits<{
 }>()
 
 const pageNo = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(10)
 const issueNo = ref('')
 const startDate = ref('')
 const endDate = ref('')
@@ -58,7 +58,7 @@ function resetSearch() {
   startDate.value = ''
   endDate.value = ''
   pageNo.value = 1
-  pageSize.value = 20
+  pageSize.value = 10
   void loadHistory()
 }
 
@@ -66,7 +66,7 @@ function resetSearch() {
  * 切换分页页码，并防止跳转到无效页。
  */
 function changePage(nextPageNo: number) {
-  if (!pageData.value || nextPageNo < 1 || nextPageNo > pageData.value.pages) {
+  if (loading.value || !pageData.value || nextPageNo < 1 || nextPageNo > pageData.value.pages) {
     return
   }
   pageNo.value = nextPageNo
@@ -77,6 +77,9 @@ function changePage(nextPageNo: number) {
  * 修改每页条数后回到第一页，避免旧页码超出新分页范围。
  */
 function changePageSize() {
+  if (loading.value) {
+    return
+  }
   pageNo.value = 1
   void loadHistory()
 }
@@ -139,22 +142,25 @@ onMounted(loadHistory)
         <p class="data-note">开奖数据仅供参考，最终结果以中国体彩网官方公布为准。</p>
       </div>
 
-      <StateMessage v-if="loading" title="正在加载开奖记录" />
+      <StateMessage v-if="loading && !pageData" title="正在加载开奖记录" />
       <StateMessage
-        v-else-if="error"
+        v-else-if="error && !pageData"
         title="开奖记录加载失败"
         :message="error"
         action-label="重试"
         @action="loadHistory"
       />
       <StateMessage
-        v-else-if="!pageData || pageData.draws.length === 0"
+        v-else-if="!loading && !error && (!pageData || pageData.draws.length === 0)"
         title="暂无开奖记录"
         message="请先完成开奖数据同步。"
       />
 
-      <template v-else>
-        <div class="table-scroll">
+      <template v-else-if="pageData && pageData.draws.length > 0">
+        <div class="table-region" :class="{ 'table-region--loading': loading }">
+          <div v-if="loading" class="table-refreshing" role="status">正在刷新开奖记录</div>
+          <div v-if="error" class="table-error">{{ error }}</div>
+          <div class="table-scroll">
           <table class="data-table">
             <thead>
               <tr>
@@ -185,6 +191,7 @@ onMounted(loadHistory)
               </tr>
             </tbody>
           </table>
+          </div>
         </div>
 
         <div class="pagination-bar">
@@ -195,7 +202,7 @@ onMounted(loadHistory)
             <button
               class="page-button"
               type="button"
-              :disabled="pageNo <= 1"
+              :disabled="loading || pageNo <= 1"
               @click="changePage(pageNo - 1)"
             >
               ‹
@@ -204,12 +211,17 @@ onMounted(loadHistory)
             <button
               class="page-button"
               type="button"
-              :disabled="pageNo >= pageData.pages"
+              :disabled="loading || pageNo >= pageData.pages"
               @click="changePage(pageNo + 1)"
             >
               ›
             </button>
-            <select v-model.number="pageSize" class="select-input page-size-select" @change="changePageSize">
+            <select
+              v-model.number="pageSize"
+              class="select-input page-size-select"
+              :disabled="loading"
+              @change="changePageSize"
+            >
               <option :value="10">10 条/页</option>
               <option :value="20">20 条/页</option>
               <option :value="50">50 条/页</option>
@@ -325,6 +337,37 @@ onMounted(loadHistory)
 
 .money-cell {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
+
+.table-region {
+  position: relative;
+}
+
+.table-region--loading .data-table {
+  opacity: 0.68;
+}
+
+.table-refreshing,
+.table-error {
+  position: absolute;
+  top: -12px;
+  right: 0;
+  z-index: 2;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 800;
+  box-shadow: 0 8px 20px rgb(15 23 42 / 0.08);
+}
+
+.table-refreshing {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.table-error {
+  background: #fef2f2;
+  color: #b91c1c;
 }
 
 .pagination-bar {

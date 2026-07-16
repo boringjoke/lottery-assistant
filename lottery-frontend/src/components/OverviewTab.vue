@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
+import { ApiError } from '@/api/http'
 import { fetchDltDrawPage, fetchLatestDltDraw } from '@/api/lottery'
 import LotteryNumberGroup from '@/components/LotteryNumberGroup.vue'
 import StateMessage from '@/components/StateMessage.vue'
@@ -24,6 +25,21 @@ const nextDrawCountdown = computed(() =>
 let countdownTimer: ReturnType<typeof setInterval> | undefined
 
 /**
+ * 数据库尚未同步开奖时，最新开奖接口可能返回 404；概览页应展示空状态而不是失败页。
+ */
+async function fetchLatestDltDrawSafely(): Promise<LotteryDrawDetail | null> {
+  try {
+    return await fetchLatestDltDraw()
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return null
+    }
+
+    throw err
+  }
+}
+
+/**
  * 同时加载最新开奖和最近 5 期开奖，保证概览页两块数据同步刷新。
  */
 async function loadOverview() {
@@ -32,7 +48,7 @@ async function loadOverview() {
 
   try {
     const [latest, recentPage] = await Promise.all([
-      fetchLatestDltDraw(),
+      fetchLatestDltDrawSafely(),
       fetchDltDrawPage({ pageNo: 1, pageSize: 5 }),
     ])
     latestDraw.value = latest

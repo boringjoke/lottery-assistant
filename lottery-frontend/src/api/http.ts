@@ -4,14 +4,16 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
 
 export class ApiError extends Error {
   code: string
+  status?: number
 
   /**
-   * 保存后端业务错误码，方便页面后续按错误类型做差异化展示。
+   * 保存后端业务错误码和 HTTP 状态码，方便页面后续按错误类型做差异化展示。
    */
-  constructor(message: string, code = 'REQUEST_FAILED') {
+  constructor(message: string, code = 'REQUEST_FAILED', status?: number) {
     super(message)
     this.name = 'ApiError'
     this.code = code
+    this.status = status
   }
 }
 
@@ -51,7 +53,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   })
 
   if (!response.ok) {
-    throw new ApiError(`请求失败：${response.status}`)
+    throw new ApiError(`请求失败：${response.status}`, 'HTTP_STATUS_ERROR', response.status)
   }
 
   const payload = (await response.json()) as ApiResponse<T>
