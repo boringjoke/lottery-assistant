@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AdminLotterySyncView from '@/views/AdminLotterySyncView.vue'
+import LoginView from '@/views/LoginView.vue'
 import LotteryAssistantView from '@/views/LotteryAssistantView.vue'
 
 const router = createRouter({
@@ -13,6 +14,11 @@ const router = createRouter({
       path: '/lottery-assistant',
       name: 'lottery-assistant',
       component: LotteryAssistantView,
+    },
+    {
+      path: '/login',
+      name: 'login',
+      component: LoginView,
     },
     {
       path: '/admin/lottery-sync',
