@@ -18,7 +18,7 @@ import java.util.Map;
  * @param lastSuccessPage 最后成功同步页码
  * @param failedPage 失败页码
  * @param pageSize 每页数量
- * @param maxPages 最大同步页数
+ * @param maxPages 最大扫描页数
  * @param pageDelayMillis 每页同步间隔毫秒数
  * @param stopWhenLastPage 遇到最后一页时是否停止
  * @param successCount 成功同步数量

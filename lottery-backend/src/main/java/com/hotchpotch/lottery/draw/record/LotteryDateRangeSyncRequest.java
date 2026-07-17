@@ -9,7 +9,6 @@ import java.time.LocalDate;
  * @param endDate 结束开奖日期，较晚日期
  * @param startPage 历史同步起始页码
  * @param pageSize 每页数量
- * @param maxPages 最大同步页数
  * @param pageDelayMillis 每页同步间隔毫秒数
  * @param stopWhenLastPage 遇到最后一页时是否停止
  */
@@ -18,7 +17,6 @@ public record LotteryDateRangeSyncRequest(
         LocalDate endDate,
         Integer startPage,
         Integer pageSize,
-        Integer maxPages,
         Integer pageDelayMillis,
         Boolean stopWhenLastPage) {
 }

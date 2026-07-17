@@ -21,11 +21,13 @@ import com.hotchpotch.lottery.draw.entity.LotteryPrizeTier;
 import com.hotchpotch.lottery.draw.entity.LotterySyncTask;
 import com.hotchpotch.lottery.draw.record.LotteryDrawSyncResult;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageResponse;
+import com.hotchpotch.lottery.draw.record.LotterySyncTaskStatisticsResponse;
 import com.hotchpotch.lottery.draw.repository.LotteryDrawRepository;
 import com.hotchpotch.lottery.draw.repository.LotteryPrizeTierRepository;
 import com.hotchpotch.lottery.draw.repository.LotterySyncTaskRepository;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -715,6 +717,35 @@ class LotteryDrawSyncServiceTest {
     }
 
     /**
+     * 验证存在任意活跃任务时，失败任务重试也不能创建新的待执行任务。
+     */
+    @Test
+    void retrySyncTaskRejectsWhenAnyActiveTaskExists() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository);
+        LotterySyncTask failedTask = pendingHistoryTask("DLT-HISTORY-FAILED-003");
+        failedTask.setStatus("FAILED");
+        failedTask.setFailedPage(3);
+        LotterySyncTask runningTask = pendingDateRangeTask("DLT-DATE-RANGE-RUNNING-003");
+        runningTask.setStatus("RUNNING");
+
+        when(syncTaskRepository.findByTaskNo("DLT-HISTORY-FAILED-003")).thenReturn(Optional.of(failedTask));
+        when(syncTaskRepository.findAnyActiveTask("DLT")).thenReturn(Optional.of(runningTask));
+
+        assertThatThrownBy(() -> service.retrySyncTask("DLT-HISTORY-FAILED-003", "ADMIN"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("当前已有同步任务正在执行");
+
+        verify(syncTaskRepository).findAnyActiveTask("DLT");
+        verify(syncTaskRepository, never()).insert(any());
+        verify(syncTaskRepository, never()).updateById(failedTask);
+    }
+
+    /**
      * 验证同步任务列表会归一化分页参数、转换状态筛选，并返回分页响应。
      */
     @Test
@@ -751,6 +782,133 @@ class LotteryDrawSyncServiceTest {
                 .containsEntry("maxPages", "2");
         verify(syncTaskRepository).countByStatus("FAILED");
         verify(syncTaskRepository).findPageByStatus("FAILED", 1, 20);
+    }
+
+    /**
+     * 验证同步任务统计会聚合状态数量、今日成功数和最近失败摘要。
+     */
+    @Test
+    void getSyncTaskStatisticsReturnsCountsAndLatestFailure() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository);
+        LotterySyncTask successTask = pendingHistoryTask("DLT-HISTORY-SUCCESS-001");
+        successTask.setStatus("SUCCESS");
+        successTask.setFinishTime(LocalDateTime.of(2026, 7, 16, 10, 0));
+        LotterySyncTask failedTask = pendingHistoryTask("DLT-HISTORY-FAILED-002");
+        failedTask.setStatus("FAILED");
+        failedTask.setFinishTime(LocalDateTime.of(2026, 7, 16, 11, 0));
+        failedTask.setFailureReason("crawler timeout");
+
+        when(syncTaskRepository.countByStatus("RUNNING")).thenReturn(1L);
+        when(syncTaskRepository.countByStatus("PENDING")).thenReturn(2L);
+        when(syncTaskRepository.countByStatus("FAILED")).thenReturn(3L);
+        when(syncTaskRepository.countByStatusSince(org.mockito.ArgumentMatchers.eq("SUCCESS"), any()))
+                .thenReturn(4L);
+        when(syncTaskRepository.findLatestByStatus("SUCCESS")).thenReturn(Optional.of(successTask));
+        when(syncTaskRepository.findLatestByStatus("FAILED")).thenReturn(Optional.of(failedTask));
+
+        LotterySyncTaskStatisticsResponse response = service.getSyncTaskStatistics();
+
+        assertThat(response.runningCount()).isEqualTo(1L);
+        assertThat(response.pendingCount()).isEqualTo(2L);
+        assertThat(response.failedCount()).isEqualTo(3L);
+        assertThat(response.successCountToday()).isEqualTo(4L);
+        assertThat(response.latestSuccessTime()).isEqualTo(LocalDateTime.of(2026, 7, 16, 10, 0));
+        assertThat(response.latestFailureTime()).isEqualTo(LocalDateTime.of(2026, 7, 16, 11, 0));
+        assertThat(response.latestFailureMessage()).isEqualTo("crawler timeout");
+    }
+
+    /**
+     * 验证存在任意活跃任务时，不再创建新的统一历史同步任务。
+     */
+    @Test
+    void startHistorySyncRejectsWhenAnyActiveTaskExists() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository);
+        LotterySyncTask runningTask = pendingHistoryTask("DLT-HISTORY-RUNNING-001");
+        runningTask.setStatus("RUNNING");
+        when(syncTaskRepository.findAnyActiveTask("DLT")).thenReturn(Optional.of(runningTask));
+
+        assertThatThrownBy(() -> service.startHistorySync(1, 20, 5, 0, true, "ADMIN"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("当前已有同步任务正在执行");
+
+        verify(syncTaskRepository).findAnyActiveTask("DLT");
+        verify(syncTaskRepository, never()).insert(any());
+    }
+
+    /**
+     * 验证已有运行中的其他类型任务时，再创建日期范围任务会按全局活跃任务直接拒绝。
+     */
+    @Test
+    void startDateRangeSyncRejectsWhenAnotherSyncTypeIsActive() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository);
+        LotterySyncTask runningTask = pendingHistoryTask("DLT-HISTORY-RUNNING-001");
+        runningTask.setStatus("RUNNING");
+        when(syncTaskRepository.findAnyActiveTask("DLT")).thenReturn(Optional.of(runningTask));
+
+        assertThatThrownBy(() -> service.startDateRangeSync(
+                        LocalDate.of(2025, 6, 1),
+                        LocalDate.of(2026, 6, 30),
+                        1,
+                        10,
+                        5,
+                        3000,
+                        true,
+                        "ADMIN"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("当前已有同步任务正在执行");
+
+        verify(syncTaskRepository).findAnyActiveTask("DLT");
+        verify(syncTaskRepository, never()).insert(any());
+    }
+
+    /**
+     * 验证应用启动恢复会将遗留 PENDING/RUNNING 任务标记为失败并保留可重试进度。
+     */
+    @Test
+    void recoverInterruptedActiveTasksMarksPendingAndRunningTasksFailed() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository);
+        LotterySyncTask pendingTask = pendingHistoryTask("DLT-HISTORY-PENDING-002");
+        LotterySyncTask runningTask = pendingHistoryTask("DLT-HISTORY-RUNNING-002");
+        runningTask.setStatus("RUNNING");
+        runningTask.setCurrentPage(4);
+        runningTask.setLastSuccessPage(3);
+        when(syncTaskRepository.findByStatus("PENDING")).thenReturn(List.of(pendingTask));
+        when(syncTaskRepository.findByStatus("RUNNING")).thenReturn(List.of(runningTask));
+
+        int recoveredCount = service.recoverInterruptedActiveTasks();
+
+        assertThat(recoveredCount).isEqualTo(2);
+        assertThat(pendingTask.getStatus()).isEqualTo("FAILED");
+        assertThat(pendingTask.getFailedPage()).isEqualTo(1);
+        assertThat(pendingTask.getFailureReason()).contains("应用重启导致任务中断");
+        assertThat(pendingTask.getFinishTime()).isNotNull();
+        assertThat(runningTask.getStatus()).isEqualTo("FAILED");
+        assertThat(runningTask.getFailedPage()).isEqualTo(4);
+        assertThat(runningTask.getLastSuccessPage()).isEqualTo(3);
+        assertThat(runningTask.getFailureReason()).contains("应用重启导致任务中断");
+        assertThat(runningTask.getFinishTime()).isNotNull();
+        verify(syncTaskRepository).updateById(pendingTask);
+        verify(syncTaskRepository).updateById(runningTask);
     }
 
     /**

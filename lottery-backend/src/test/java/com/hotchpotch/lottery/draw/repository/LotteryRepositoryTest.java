@@ -14,6 +14,7 @@ import com.hotchpotch.lottery.draw.entity.LotterySyncTask;
 import com.hotchpotch.lottery.draw.mapper.LotteryDrawMapper;
 import com.hotchpotch.lottery.draw.mapper.LotteryPrizeTierMapper;
 import com.hotchpotch.lottery.draw.mapper.LotterySyncTaskMapper;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -117,6 +118,25 @@ class LotteryRepositoryTest {
 
         assertThat(repository.findPageByStatus("FAILED", 1, 20)).containsExactly(task);
         assertThat(repository.countByStatus("FAILED")).isEqualTo(1L);
+        verify(mapper).selectList(anySyncTaskWrapper());
+        verify(mapper).selectCount(anySyncTaskWrapper());
+    }
+
+    @Test
+    void syncTaskRepositoryFindsActiveTasksAndLatestStatusTask() {
+        LotterySyncTaskMapper mapper = mock(LotterySyncTaskMapper.class);
+        LotterySyncTask task = new LotterySyncTask();
+        when(mapper.selectOne(anySyncTaskWrapper())).thenReturn(task);
+        when(mapper.selectList(anySyncTaskWrapper())).thenReturn(List.of(task));
+        when(mapper.selectCount(anySyncTaskWrapper())).thenReturn(2L);
+
+        LotterySyncTaskRepository repository = new LotterySyncTaskRepository(mapper);
+
+        assertThat(repository.findAnyActiveTask("DLT")).containsSame(task);
+        assertThat(repository.findLatestByStatus("FAILED")).containsSame(task);
+        assertThat(repository.findByStatus("RUNNING")).containsExactly(task);
+        assertThat(repository.countByStatusSince("SUCCESS", LocalDateTime.of(2026, 7, 16, 0, 0))).isEqualTo(2L);
+        verify(mapper, org.mockito.Mockito.times(2)).selectOne(anySyncTaskWrapper());
         verify(mapper).selectList(anySyncTaskWrapper());
         verify(mapper).selectCount(anySyncTaskWrapper());
     }

@@ -1,6 +1,7 @@
 package com.hotchpotch.lottery.draw.controller;
 
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -9,8 +10,10 @@ import com.hotchpotch.lottery.config.SecurityConfig;
 import com.hotchpotch.lottery.config.SyncProperties;
 import com.hotchpotch.lottery.draw.record.LotteryDrawSyncResult;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageResponse;
+import com.hotchpotch.lottery.draw.record.LotterySyncTaskStatisticsResponse;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncTaskService;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncService;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -149,6 +152,27 @@ class AdminDrawSyncControllerSecurityTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("FAILED"));
+    }
+
+    /**
+     * 验证本地管理端同步任务统计接口不需要 Basic Auth 也可以通过安全过滤链。
+     */
+    @Test
+    void getSyncTaskStatisticsAllowsLocalManualCallWithoutBasicAuth() throws Exception {
+        when(syncService.getSyncTaskStatistics()).thenReturn(new LotterySyncTaskStatisticsResponse(
+                1L,
+                0L,
+                2L,
+                3L,
+                LocalDateTime.of(2026, 7, 16, 10, 0),
+                LocalDateTime.of(2026, 7, 16, 11, 0),
+                "crawler timeout"));
+
+        mockMvc.perform(get("/api/admin/draws/sync/tasks/statistics"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.runningCount").value(1))
+                .andExpect(jsonPath("$.data.latestFailureMessage").value("crawler timeout"));
     }
 
     /**

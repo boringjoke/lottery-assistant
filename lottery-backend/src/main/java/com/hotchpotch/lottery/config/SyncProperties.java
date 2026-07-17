@@ -34,7 +34,7 @@ public class SyncProperties {
     private int taskDelayMillis = 10000;
 
     /**
-     * 单个历史同步任务最多允许同步的页数。
+     * 单个历史或范围同步任务最多允许扫描的页数。
      */
     private int maxPagesPerTask = 20;
 

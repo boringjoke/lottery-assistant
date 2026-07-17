@@ -17,20 +17,23 @@ import com.hotchpotch.lottery.draw.enums.LotteryType;
 import com.hotchpotch.lottery.draw.record.LotteryDrawSyncResult;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageResponse;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskResponse;
+import com.hotchpotch.lottery.draw.record.LotterySyncTaskStatisticsResponse;
 import com.hotchpotch.lottery.draw.repository.LotteryDrawRepository;
 import com.hotchpotch.lottery.draw.repository.LotteryPrizeTierRepository;
 import com.hotchpotch.lottery.draw.repository.LotterySyncTaskRepository;
-import java.time.LocalDateTime;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +51,7 @@ public class LotteryDrawSyncService {
     private final LotteryDrawRepository drawRepository;
     private final LotteryPrizeTierRepository prizeTierRepository;
     private final LotterySyncTaskRepository syncTaskRepository;
+    private final Object syncTaskCreationMonitor = new Object();
 
     /**
      * 初始化同步服务依赖的 crawler 客户端和数据仓储。
@@ -67,11 +71,10 @@ public class LotteryDrawSyncService {
      * 同步 crawler 返回的最新一期大乐透开奖。
      */
     public LotteryDrawSyncResult syncLatestDraw(String triggerSource) {
-        LotterySyncTask task = createRunningTask(
+        LotterySyncTask task = insertNewSyncTask(() -> createRunningTask(
                 LotterySyncType.LATEST.code(),
                 triggerSource,
-                LATEST_REQUEST_PARAMS);
-        syncTaskRepository.insert(task);
+                LATEST_REQUEST_PARAMS));
 
         try {
             CrawlerDraw draw = fetchLatestDraw();
@@ -89,11 +92,11 @@ public class LotteryDrawSyncService {
      * 同步 crawler 返回的一页大乐透历史开奖。
      */
     public LotteryDrawSyncResult syncHistoryPage(int pageNo, int pageSize, String triggerSource) {
-        LotterySyncTask task = createRunningTask(
+        String requestParams = historyPageRequestParams(pageNo, pageSize);
+        LotterySyncTask task = insertNewSyncTask(() -> createRunningTask(
                 LotterySyncType.HISTORY_PAGE.code(),
                 triggerSource,
-                historyPageRequestParams(pageNo, pageSize));
-        syncTaskRepository.insert(task);
+                requestParams));
 
         try {
             SyncCounter counter = syncHistoryPageDraws(pageNo, pageSize);
@@ -116,14 +119,13 @@ public class LotteryDrawSyncService {
             boolean stopWhenLastPage,
             String triggerSource) {
         validateHistorySyncParams(startPage, pageSize, maxPages, pageDelayMillis);
-        LotterySyncTask task = createPendingHistoryTask(
+        LotterySyncTask task = insertNewSyncTask(() -> createPendingHistoryTask(
                 startPage,
                 pageSize,
                 maxPages,
                 pageDelayMillis,
                 stopWhenLastPage,
-                triggerSource);
-        syncTaskRepository.insert(task);
+                triggerSource));
         return result(task, LotteryType.DLT.code(), null);
     }
 
@@ -141,7 +143,7 @@ public class LotteryDrawSyncService {
             String triggerSource) {
         validateHistorySyncParams(startPage, pageSize, maxPages, pageDelayMillis);
         validateIssueRangeParams(startIssueNo, endIssueNo);
-        LotterySyncTask task = createPendingIssueRangeTask(
+        LotterySyncTask task = insertNewSyncTask(() -> createPendingIssueRangeTask(
                 startIssueNo.trim(),
                 endIssueNo.trim(),
                 startPage,
@@ -149,8 +151,7 @@ public class LotteryDrawSyncService {
                 maxPages,
                 pageDelayMillis,
                 stopWhenLastPage,
-                triggerSource);
-        syncTaskRepository.insert(task);
+                triggerSource));
         return result(task, LotteryType.DLT.code(), null);
     }
 
@@ -168,7 +169,7 @@ public class LotteryDrawSyncService {
             String triggerSource) {
         validateHistorySyncParams(startPage, pageSize, maxPages, pageDelayMillis);
         validateDateRangeParams(startDate, endDate);
-        LotterySyncTask task = createPendingDateRangeTask(
+        LotterySyncTask task = insertNewSyncTask(() -> createPendingDateRangeTask(
                 startDate,
                 endDate,
                 startPage,
@@ -176,8 +177,7 @@ public class LotteryDrawSyncService {
                 maxPages,
                 pageDelayMillis,
                 stopWhenLastPage,
-                triggerSource);
-        syncTaskRepository.insert(task);
+                triggerSource));
         return result(task, LotteryType.DLT.code(), null);
     }
 
@@ -190,8 +190,7 @@ public class LotteryDrawSyncService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "同步任务不存在"));
         validateRetryableSyncTask(failedTask);
 
-        LotterySyncTask retryTask = createRetryTask(failedTask, triggerSource);
-        syncTaskRepository.insert(retryTask);
+        LotterySyncTask retryTask = insertNewSyncTask(() -> createRetryTask(failedTask, triggerSource));
         markRetried(failedTask);
         return result(retryTask, LotteryType.DLT.code(), null);
     }
@@ -285,7 +284,7 @@ public class LotteryDrawSyncService {
                     return issue >= startIssue && issue <= endIssue;
                 },
                 draws -> hasReachedStartIssue(draws, startIssue),
-                "期号范围同步达到最大页数仍未完成");
+                "期号范围同步达到系统最大扫描页数仍未完成，请缩小范围或调整起始页后重试");
     }
 
     /**
@@ -301,7 +300,7 @@ public class LotteryDrawSyncService {
                         && !draw.drawDate().isBefore(startDate)
                         && !draw.drawDate().isAfter(endDate),
                 draws -> hasReachedStartDate(draws, startDate),
-                "日期范围同步达到最大页数仍未完成");
+                "日期范围同步达到系统最大扫描页数仍未完成，请缩小范围或调整起始页后重试");
     }
 
     /**
@@ -402,6 +401,79 @@ public class LotteryDrawSyncService {
                 calculatePages(total, safePageSize),
                 normalizedStatus,
                 tasks);
+    }
+
+    /**
+     * 查询同步任务状态统计，用于管理页顶部展示。
+     */
+    public LotterySyncTaskStatisticsResponse getSyncTaskStatistics() {
+        LotterySyncTask latestSuccessTask = syncTaskRepository
+                .findLatestByStatus(LotterySyncTaskStatus.SUCCESS.code())
+                .orElse(null);
+        LotterySyncTask latestFailedTask = syncTaskRepository
+                .findLatestByStatus(LotterySyncTaskStatus.FAILED.code())
+                .orElse(null);
+
+        return new LotterySyncTaskStatisticsResponse(
+                syncTaskRepository.countByStatus(LotterySyncTaskStatus.RUNNING.code()),
+                syncTaskRepository.countByStatus(LotterySyncTaskStatus.PENDING.code()),
+                syncTaskRepository.countByStatus(LotterySyncTaskStatus.FAILED.code()),
+                syncTaskRepository.countByStatusSince(
+                        LotterySyncTaskStatus.SUCCESS.code(),
+                        LocalDate.now().atStartOfDay()),
+                latestSuccessTask == null ? null : latestSuccessTask.getFinishTime(),
+                latestFailedTask == null ? null : latestFailedTask.getFinishTime(),
+                latestFailedTask == null ? null : latestFailedTask.getFailureReason());
+    }
+
+    /**
+     * 应用启动后将遗留 PENDING/RUNNING 任务标记为失败，避免管理页长期显示活跃状态。
+     */
+    public int recoverInterruptedActiveTasks() {
+        List<LotterySyncTask> interruptedTasks = new java.util.ArrayList<>();
+        interruptedTasks.addAll(syncTaskRepository.findByStatus(LotterySyncTaskStatus.PENDING.code()));
+        interruptedTasks.addAll(syncTaskRepository.findByStatus(LotterySyncTaskStatus.RUNNING.code()));
+        for (LotterySyncTask task : interruptedTasks) {
+            task.setStatus(LotterySyncTaskStatus.FAILED.code());
+            if (task.getFailedPage() == null) {
+                task.setFailedPage(defaultIfNull(task.getCurrentPage(), task.getStartPage()));
+            }
+            if (task.getFailedCount() == null || task.getFailedCount() < 1) {
+                task.setFailedCount(1);
+            }
+            task.setFailureReason("应用重启导致任务中断，请手动重试");
+            task.setFinishTime(LocalDateTime.now());
+            syncTaskRepository.updateById(task);
+        }
+
+        return interruptedTasks.size();
+    }
+
+    /**
+     * 创建新同步任务前检查是否已有任意待执行或运行中任务。
+     */
+    private void ensureNoActiveSyncTask() {
+        Optional<LotterySyncTask> activeTask = Optional.ofNullable(
+                        syncTaskRepository.findAnyActiveTask(LotteryType.DLT.code()))
+                .orElse(Optional.empty());
+        activeTask
+                .ifPresent(task -> {
+                    throw new BusinessException(
+                            ErrorCode.INVALID_REQUEST,
+                            "当前已有同步任务正在执行，请稍后再试");
+                });
+    }
+
+    /**
+     * 串行化“检查活跃任务并插入新任务”的临界区，避免同一 JVM 内并发创建多个同步任务。
+     */
+    private LotterySyncTask insertNewSyncTask(Supplier<LotterySyncTask> taskSupplier) {
+        synchronized (syncTaskCreationMonitor) {
+            ensureNoActiveSyncTask();
+            LotterySyncTask task = taskSupplier.get();
+            syncTaskRepository.insert(task);
+            return task;
+        }
     }
 
     /**

@@ -14,6 +14,7 @@ import com.hotchpotch.lottery.common.response.GlobalExceptionHandler;
 import com.hotchpotch.lottery.draw.record.LotteryDrawSyncResult;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageResponse;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskResponse;
+import com.hotchpotch.lottery.draw.record.LotterySyncTaskStatisticsResponse;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncTaskService;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncService;
 import java.time.LocalDateTime;
@@ -171,7 +172,7 @@ class AdminDrawSyncControllerTest {
                 0,
                 0,
                 0);
-        when(syncService.startIssueRangeSync("26070", "26076", 1, 20, 3, 5000, true, "ADMIN"))
+        when(syncService.startIssueRangeSync("26070", "26076", 1, 20, 20, 5000, true, "ADMIN"))
                 .thenReturn(result);
         MockMvc mockMvc = MockMvcBuilders
                 .standaloneSetup(newController(syncService, syncTaskService))
@@ -195,7 +196,7 @@ class AdminDrawSyncControllerTest {
                 .andExpect(jsonPath("$.data.taskNo").value("DLT-ISSUE-RANGE-ASYNC-001"))
                 .andExpect(jsonPath("$.data.status").value("PENDING"));
 
-        verify(syncService).startIssueRangeSync("26070", "26076", 1, 20, 3, 5000, true, "ADMIN");
+        verify(syncService).startIssueRangeSync("26070", "26076", 1, 20, 20, 5000, true, "ADMIN");
         verify(syncTaskService).runTask("DLT-ISSUE-RANGE-ASYNC-001");
     }
 
@@ -248,7 +249,7 @@ class AdminDrawSyncControllerTest {
                 java.time.LocalDate.of(2026, 7, 11),
                 1,
                 20,
-                3,
+                20,
                 5000,
                 true,
                 "ADMIN")).thenReturn(result);
@@ -279,7 +280,7 @@ class AdminDrawSyncControllerTest {
                 java.time.LocalDate.of(2026, 7, 11),
                 1,
                 20,
-                3,
+                20,
                 5000,
                 true,
                 "ADMIN");
@@ -429,6 +430,38 @@ class AdminDrawSyncControllerTest {
                 .andExpect(jsonPath("$.data.tasks[0].failedPage").value(3));
 
         verify(syncService).listSyncTasks(1, 20, "FAILED");
+    }
+
+    /**
+     * 验证同步任务统计接口会返回管理页顶部需要的状态概览。
+     */
+    @Test
+    void getSyncTaskStatisticsReturnsStatusOverview() throws Exception {
+        LotteryDrawSyncService syncService = mock(LotteryDrawSyncService.class);
+        LotteryDrawSyncTaskService syncTaskService = mock(LotteryDrawSyncTaskService.class);
+        LotterySyncTaskStatisticsResponse response = new LotterySyncTaskStatisticsResponse(
+                1L,
+                2L,
+                3L,
+                4L,
+                LocalDateTime.of(2026, 7, 16, 10, 0),
+                LocalDateTime.of(2026, 7, 16, 11, 0),
+                "crawler timeout");
+        when(syncService.getSyncTaskStatistics()).thenReturn(response);
+        MockMvc mockMvc = MockMvcBuilders
+                .standaloneSetup(newController(syncService, syncTaskService))
+                .build();
+
+        mockMvc.perform(get("/api/admin/draws/sync/tasks/statistics"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.runningCount").value(1))
+                .andExpect(jsonPath("$.data.pendingCount").value(2))
+                .andExpect(jsonPath("$.data.failedCount").value(3))
+                .andExpect(jsonPath("$.data.successCountToday").value(4))
+                .andExpect(jsonPath("$.data.latestFailureMessage").value("crawler timeout"));
+
+        verify(syncService).getSyncTaskStatistics();
     }
 
     /**

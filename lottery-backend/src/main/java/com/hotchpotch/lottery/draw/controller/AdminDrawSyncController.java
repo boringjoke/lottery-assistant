@@ -13,6 +13,7 @@ import com.hotchpotch.lottery.draw.record.LotteryIssueRangeSyncRequest;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageRequest;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageResponse;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskResponse;
+import com.hotchpotch.lottery.draw.record.LotterySyncTaskStatisticsResponse;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncService;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncTaskService;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -111,9 +112,7 @@ public class AdminDrawSyncController {
 
         int resolvedStartPage = defaultIfNull(request.startPage(), PageConstants.DEFAULT_PAGE_NO);
         int resolvedPageSize = defaultIfNull(request.pageSize(), PageConstants.DEFAULT_PAGE_SIZE);
-        int resolvedMaxPages = Math.min(
-                defaultIfNull(request.maxPages(), syncProperties.maxPagesPerTask()),
-                syncProperties.maxPagesPerTask());
+        int resolvedMaxPages = syncProperties.maxPagesPerTask();
         int resolvedPageDelayMillis = defaultIfNull(
                 request.pageDelayMillis(),
                 syncProperties.defaultPageDelayMillis());
@@ -143,9 +142,7 @@ public class AdminDrawSyncController {
 
         int resolvedStartPage = defaultIfNull(request.startPage(), PageConstants.DEFAULT_PAGE_NO);
         int resolvedPageSize = defaultIfNull(request.pageSize(), PageConstants.DEFAULT_PAGE_SIZE);
-        int resolvedMaxPages = Math.min(
-                defaultIfNull(request.maxPages(), syncProperties.maxPagesPerTask()),
-                syncProperties.maxPagesPerTask());
+        int resolvedMaxPages = syncProperties.maxPagesPerTask();
         int resolvedPageDelayMillis = defaultIfNull(
                 request.pageDelayMillis(),
                 syncProperties.defaultPageDelayMillis());
@@ -185,6 +182,14 @@ public class AdminDrawSyncController {
                 PageConstants.DEFAULT_PAGE_SIZE);
         String resolvedStatus = request == null ? null : request.status();
         return ApiResponse.success(syncService.listSyncTasks(resolvedPageNo, resolvedPageSize, resolvedStatus));
+    }
+
+    /**
+     * 查询同步任务状态统计，供管理页顶部概览展示。
+     */
+    @GetMapping("/tasks/statistics")
+    public ApiResponse<LotterySyncTaskStatisticsResponse> getSyncTaskStatistics() {
+        return ApiResponse.success(syncService.getSyncTaskStatistics());
     }
 
     /**
