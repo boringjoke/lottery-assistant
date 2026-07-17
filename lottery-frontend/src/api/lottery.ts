@@ -1,9 +1,17 @@
-import { get, post } from '@/api/http'
+import { get, post, request } from '@/api/http'
 import type {
   LotteryDltAnalyzeRequest,
   LotteryDltAnalyzeResponse,
+  LotteryDateRangeSyncRequest,
+  LotteryDrawSyncResult,
   LotteryDrawDetail,
   LotteryDrawPage,
+  LotteryHistorySyncRequest,
+  LotteryIssueRangeSyncRequest,
+  LotterySyncTask,
+  LotterySyncTaskPage,
+  LotterySyncTaskPageRequest,
+  LotterySyncTaskStatistics,
 } from '@/types/lottery'
 
 export interface DltDrawPageQuery {
@@ -42,4 +50,76 @@ export function analyzeDltNumbers(
   request: LotteryDltAnalyzeRequest,
 ): Promise<LotteryDltAnalyzeResponse> {
   return post<LotteryDltAnalyzeResponse>('/api/lottery/dlt/analyze', request)
+}
+
+/**
+ * 查询同步任务状态统计，用于管理页顶部概览。
+ */
+export function fetchSyncTaskStatistics(): Promise<LotterySyncTaskStatistics> {
+  return get<LotterySyncTaskStatistics>('/api/admin/draws/sync/tasks/statistics')
+}
+
+/**
+ * 分页查询同步任务列表。
+ */
+export function fetchSyncTasks(requestBody: LotterySyncTaskPageRequest): Promise<LotterySyncTaskPage> {
+  return post<LotterySyncTaskPage>('/api/admin/draws/sync/tasks', requestBody)
+}
+
+/**
+ * 按任务编号查询同步任务详情。
+ */
+export function fetchSyncTask(taskNo: string): Promise<LotterySyncTask> {
+  return get<LotterySyncTask>(`/api/admin/draws/sync/tasks/${encodeURIComponent(taskNo)}`)
+}
+
+/**
+ * 触发最新一期开奖同步。
+ */
+export function syncLatestDraw(): Promise<LotteryDrawSyncResult> {
+  return post<LotteryDrawSyncResult>('/api/admin/draws/sync/latest')
+}
+
+/**
+ * 同步指定历史分页。
+ */
+export function syncHistoryPage(pageNo: number, pageSize: number): Promise<LotteryDrawSyncResult> {
+  return request<LotteryDrawSyncResult>('/api/admin/draws/sync/historyPage', {
+    method: 'POST',
+    query: { pageNo, pageSize },
+  })
+}
+
+/**
+ * 创建历史分页批量同步任务。
+ */
+export function startHistorySync(requestBody: LotteryHistorySyncRequest): Promise<LotteryDrawSyncResult> {
+  return post<LotteryDrawSyncResult>('/api/admin/draws/sync/history', requestBody)
+}
+
+/**
+ * 创建按期号范围同步任务。
+ */
+export function startIssueRangeSync(
+  requestBody: LotteryIssueRangeSyncRequest,
+): Promise<LotteryDrawSyncResult> {
+  return post<LotteryDrawSyncResult>('/api/admin/draws/sync/issueRange', requestBody)
+}
+
+/**
+ * 创建按开奖日期范围同步任务。
+ */
+export function startDateRangeSync(
+  requestBody: LotteryDateRangeSyncRequest,
+): Promise<LotteryDrawSyncResult> {
+  return post<LotteryDrawSyncResult>('/api/admin/draws/sync/dateRange', requestBody)
+}
+
+/**
+ * 从失败页重试同步任务。
+ */
+export function retrySyncTask(taskNo: string): Promise<LotteryDrawSyncResult> {
+  return post<LotteryDrawSyncResult>(
+    `/api/admin/draws/sync/tasks/${encodeURIComponent(taskNo)}/retry`,
+  )
 }

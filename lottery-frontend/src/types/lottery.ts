@@ -77,3 +77,103 @@ export interface LotteryDltAnalyzeResponse {
   bestPrizeName: string
   results: LotteryDltAnalyzeNumberResult[]
 }
+
+export type LotterySyncTaskStatus =
+  | 'PENDING'
+  | 'RUNNING'
+  | 'SUCCESS'
+  | 'PARTIAL_SUCCESS'
+  | 'FAILED'
+  | 'RETRIED'
+
+export type LotterySyncType =
+  | 'LATEST'
+  | 'HISTORY_PAGE'
+  | 'HISTORY'
+  | 'ISSUE_RANGE'
+  | 'DATE_RANGE'
+
+export interface LotteryDrawSyncResult {
+  taskNo: string
+  lotteryType: string
+  issueNo: string | null
+  status: LotterySyncTaskStatus
+  successCount: number
+  skippedCount: number
+  failedCount: number
+}
+
+export interface LotterySyncTaskStatistics {
+  runningCount: number
+  pendingCount: number
+  failedCount: number
+  successCountToday: number
+  latestSuccessTime: string | null
+  latestFailureTime: string | null
+  latestFailureMessage: string | null
+}
+
+export interface LotterySyncTask {
+  taskNo: string
+  lotteryType: string
+  syncType: LotterySyncType
+  triggerSource: string
+  status: LotterySyncTaskStatus
+  requestParams: string
+  requestParamMap: Record<string, string>
+  startPage: number | null
+  currentPage: number | null
+  lastSuccessPage: number | null
+  failedPage: number | null
+  pageSize: number | null
+  maxPages: number | null
+  pageDelayMillis: number | null
+  stopWhenLastPage: boolean | null
+  successCount: number
+  skippedCount: number
+  failedCount: number
+  failureReason: string | null
+  startTime: string | null
+  finishTime: string | null
+}
+
+export interface LotterySyncTaskPage {
+  pageNo: number
+  pageSize: number
+  total: number
+  pages: number
+  status: LotterySyncTaskStatus | null
+  tasks: LotterySyncTask[]
+}
+
+export interface LotterySyncTaskPageRequest {
+  pageNo: number
+  pageSize: number
+  status?: LotterySyncTaskStatus
+}
+
+export interface LotteryHistorySyncRequest {
+  startPage: number
+  pageSize: number
+  maxPages: number
+  pageDelayMillis: number
+  stopWhenLastPage: boolean
+}
+
+export interface LotteryIssueRangeSyncRequest {
+  startIssueNo: string
+  endIssueNo: string
+  startPage: number
+  pageSize: number
+  pageDelayMillis: number
+  stopWhenLastPage: boolean
+}
+
+export interface LotteryDateRangeSyncRequest {
+  startDate: string
+  endDate: string
+  startPage: number
+  pageSize: number
+  pageDelayMillis: number
+  stopWhenLastPage: boolean
+}
