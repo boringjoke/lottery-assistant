@@ -48,6 +48,33 @@ class FlywayMigrationTest {
         assertThat(migration).doesNotContainIgnoringCase("FOREIGN KEY");
     }
 
+    @Test
+    void v4CreatesUserAuthTablesWithoutDatabaseForeignKeys() {
+        String migration = readMigration("db/migration/V4__create_lottery_user_auth_tables.sql");
+
+        assertThat(migration).contains("CREATE TABLE lottery_users");
+        assertThat(migration).contains("CREATE TABLE lottery_user_credentials");
+        assertThat(migration).contains("CREATE TABLE lottery_user_oauth_accounts");
+        assertThat(migration).contains("CREATE TABLE lottery_user_roles");
+        assertThat(migration).contains("avatar_url");
+        assertThat(migration).contains("credential_type");
+        assertThat(migration).contains("identifier");
+        assertThat(migration).contains("password_hash");
+        assertThat(migration).contains("verified TINYINT(1) NOT NULL DEFAULT 0");
+        assertThat(migration).contains("provider");
+        assertThat(migration).contains("open_id");
+        assertThat(migration).contains("union_id");
+        assertThat(migration).contains("status VARCHAR(32) NOT NULL DEFAULT 'ACTIVE'");
+        assertThat(migration).contains("last_login_time");
+        assertThat(migration).contains("create_time");
+        assertThat(migration).contains("update_time");
+        assertThat(migration).doesNotContain("username VARCHAR");
+        assertThat(migration).contains("UNIQUE KEY uk_lottery_user_credentials_type_identifier (credential_type, identifier)");
+        assertThat(migration).contains("UNIQUE KEY uk_lottery_user_oauth_provider_open_id (provider, open_id)");
+        assertThat(migration).contains("UNIQUE KEY uk_lottery_user_roles_user_role (user_id, role_code)");
+        assertThat(migration).doesNotContainIgnoringCase("FOREIGN KEY");
+    }
+
     private String readMigration(String resourcePath) {
         URL resource = getClass().getClassLoader().getResource(resourcePath);
 
