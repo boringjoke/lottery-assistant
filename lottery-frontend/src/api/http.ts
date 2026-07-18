@@ -48,20 +48,39 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       'Content-Type': 'application/json',
       ...headers,
     },
+    credentials: 'include',
     body,
     ...requestOptions,
   })
 
+  const payload = await readApiResponse<T>(response)
   if (!response.ok) {
-    throw new ApiError(`请求失败：${response.status}`, 'HTTP_STATUS_ERROR', response.status)
+    throw new ApiError(
+      payload?.message || `请求失败：${response.status}`,
+      payload?.code || 'HTTP_STATUS_ERROR',
+      response.status,
+    )
   }
 
-  const payload = (await response.json()) as ApiResponse<T>
+  if (!payload) {
+    throw new ApiError('请求失败，请稍后重试')
+  }
   if (!payload.success) {
     throw new ApiError(payload.message || '请求失败，请稍后重试', payload.code)
   }
 
   return payload.data
+}
+
+/**
+ * 尝试读取后端统一响应；非 JSON 或空响应时返回 null，由调用方使用兜底文案。
+ */
+async function readApiResponse<T>(response: Response): Promise<ApiResponse<T> | null> {
+  try {
+    return (await response.json()) as ApiResponse<T>
+  } catch {
+    return null
+  }
 }
 
 /**

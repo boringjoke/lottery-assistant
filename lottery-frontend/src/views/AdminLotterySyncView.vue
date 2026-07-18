@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
+import { fetchCurrentUser } from '@/api/auth'
 import {
   fetchSyncTask,
   fetchSyncTasks,
@@ -12,6 +14,7 @@ import {
   syncHistoryPage,
   syncLatestDraw,
 } from '@/api/lottery'
+import type { CurrentUser } from '@/types/auth'
 import type {
   LotteryDateRangeSyncRequest,
   LotteryHistorySyncRequest,
@@ -23,6 +26,9 @@ import type {
   LotterySyncType,
 } from '@/types/lottery'
 import { getErrorMessage } from '@/utils/lotteryFormat'
+
+const route = useRoute()
+const router = useRouter()
 
 const statusOptions: Array<{ value: '' | LotterySyncTaskStatus; label: string }> = [
   { value: '', label: '全部状态' },
@@ -59,6 +65,9 @@ const detailDrawerOpen = ref(false)
 const detailLoading = ref(false)
 const detailError = ref('')
 const selectedTask = ref<LotterySyncTask | null>(null)
+const authChecking = ref(true)
+const permissionDenied = ref(false)
+const currentUser = ref<CurrentUser | null>(null)
 
 const historyPageForm = reactive({
   pageNo: 1,
@@ -381,7 +390,32 @@ function requestFields(task: LotterySyncTask): Array<{ label: string; value: str
     }))
 }
 
-onMounted(loadDashboard)
+/**
+ * 管理页进入时先恢复登录态；只有 ADMIN 角色才加载同步管理数据。
+ */
+async function initializeAdminPage() {
+  authChecking.value = true
+  permissionDenied.value = false
+
+  try {
+    currentUser.value = await fetchCurrentUser()
+    if (!currentUser.value.roles.includes('ADMIN')) {
+      permissionDenied.value = true
+      return
+    }
+
+    await loadDashboard()
+  } catch {
+    await router.push({
+      path: '/login',
+      query: { redirect: route.fullPath },
+    })
+  } finally {
+    authChecking.value = false
+  }
+}
+
+onMounted(initializeAdminPage)
 
 onBeforeUnmount(() => {
   if (noticeTimer) {
@@ -402,6 +436,22 @@ onBeforeUnmount(() => {
     </header>
 
     <main class="admin-main">
+      <section v-if="authChecking" class="permission-state" aria-live="polite">
+        <div class="permission-state__mark">≋</div>
+        <h1>正在验证管理权限</h1>
+        <p>请稍候，系统正在确认当前登录状态。</p>
+      </section>
+
+      <section v-else-if="permissionDenied" class="permission-state permission-state--denied">
+        <div class="permission-state__mark">!</div>
+        <h1>您无权操作页面</h1>
+        <p>当前账号没有同步管理权限，请返回公共彩票助手页面继续使用开奖查询和号码分析功能。</p>
+        <RouterLink class="permission-state__button" to="/lottery-assistant?tab=overview">
+          返回彩票助手
+        </RouterLink>
+      </section>
+
+      <template v-else>
       <section class="page-title-row">
         <div>
           <h1>开奖数据同步管理</h1>
@@ -955,6 +1005,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
       </aside>
+      </template>
     </main>
   </div>
 </template>
@@ -1005,6 +1056,68 @@ onBeforeUnmount(() => {
   padding: 6px 12px;
   font-size: 12px;
   font-weight: 800;
+}
+
+.permission-state {
+  display: flex;
+  min-height: calc(100vh - 160px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.permission-state__mark {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.permission-state--denied .permission-state__mark {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.permission-state h1 {
+  margin-bottom: 10px;
+  color: #0f172a;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.permission-state p {
+  max-width: 430px;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.permission-state__button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 22px;
+  border-radius: 9px;
+  background: #2563eb;
+  color: #ffffff;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 900;
+  text-decoration: none;
+  box-shadow: 0 10px 24px rgb(37 99 235 / 0.2);
+}
+
+.permission-state__button:hover {
+  background: #1d4ed8;
 }
 
 .admin-main {
@@ -1975,3 +2088,6 @@ tbody tr:hover {
   }
 }
 </style>
+
+
+

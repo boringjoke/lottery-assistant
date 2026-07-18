@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { fetchCurrentUser } from '@/api/auth'
 import {
   fetchSyncTask,
   fetchSyncTasks,
@@ -10,6 +11,11 @@ import {
 } from '@/api/lottery'
 import type { LotterySyncTask, LotterySyncTaskPage, LotterySyncTaskStatistics } from '@/types/lottery'
 import AdminLotterySyncView from '../AdminLotterySyncView.vue'
+
+const routerMocks = vi.hoisted(() => ({
+  push: vi.fn(),
+  route: { fullPath: '/admin/lottery-sync' },
+}))
 
 vi.mock('@/api/lottery', () => ({
   fetchSyncTasks: vi.fn(),
@@ -21,6 +27,15 @@ vi.mock('@/api/lottery', () => ({
   startHistorySync: vi.fn(),
   syncHistoryPage: vi.fn(),
   syncLatestDraw: vi.fn(),
+}))
+
+vi.mock('@/api/auth', () => ({
+  fetchCurrentUser: vi.fn(),
+}))
+
+vi.mock('vue-router', () => ({
+  useRoute: () => routerMocks.route,
+  useRouter: () => ({ push: routerMocks.push }),
 }))
 
 const statistics: LotterySyncTaskStatistics = {
@@ -104,6 +119,8 @@ function mountView() {
 
 describe('AdminLotterySyncView', () => {
   beforeEach(() => {
+    routerMocks.push.mockReset()
+    vi.mocked(fetchCurrentUser).mockReset()
     vi.mocked(fetchSyncTask).mockReset()
     vi.mocked(fetchSyncTaskStatistics).mockReset()
     vi.mocked(fetchSyncTasks).mockReset()
@@ -112,6 +129,41 @@ describe('AdminLotterySyncView', () => {
     vi.mocked(fetchSyncTaskStatistics).mockResolvedValue(statistics)
     vi.mocked(fetchSyncTasks).mockResolvedValue(taskPage)
     vi.mocked(fetchSyncTask).mockResolvedValue(failedTask)
+    vi.mocked(fetchCurrentUser).mockResolvedValue({
+      userId: 1,
+      nickname: '管理员',
+      avatarUrl: null,
+      roles: ['USER', 'ADMIN'],
+    })
+  })
+
+  it('redirects anonymous visitor to login page before loading admin data', async () => {
+    vi.mocked(fetchCurrentUser).mockRejectedValue(new Error('请先登录'))
+    mountView()
+    await flushPromises()
+
+    expect(routerMocks.push).toHaveBeenCalledWith({
+      path: '/login',
+      query: { redirect: '/admin/lottery-sync' },
+    })
+    expect(fetchSyncTaskStatistics).not.toHaveBeenCalled()
+    expect(fetchSyncTasks).not.toHaveBeenCalled()
+  })
+
+  it('shows no permission page for non-admin user', async () => {
+    vi.mocked(fetchCurrentUser).mockResolvedValue({
+      userId: 2,
+      nickname: '普通用户',
+      avatarUrl: null,
+      roles: ['USER'],
+    })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('您无权操作页面')
+    expect(wrapper.text()).toContain('返回彩票助手')
+    expect(fetchSyncTaskStatistics).not.toHaveBeenCalled()
+    expect(fetchSyncTasks).not.toHaveBeenCalled()
   })
 
   it('loads statistics and task list on mount', async () => {
