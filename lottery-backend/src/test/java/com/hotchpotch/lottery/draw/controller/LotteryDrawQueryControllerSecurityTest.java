@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.hotchpotch.lottery.config.SecurityConfig;
 import com.hotchpotch.lottery.draw.record.LotteryDrawDetailResponse;
 import com.hotchpotch.lottery.draw.service.LotteryDrawQueryService;
+import com.hotchpotch.lottery.user.service.AuthSessionService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -29,6 +30,9 @@ class LotteryDrawQueryControllerSecurityTest {
 
     @MockitoBean
     private LotteryDrawQueryService queryService;
+
+    @MockitoBean
+    private AuthSessionService authSessionService;
 
     /**
      * 验证公开开奖查询接口不需要 Basic Auth 也可以通过安全过滤链。

@@ -75,6 +75,29 @@ class FlywayMigrationTest {
         assertThat(migration).doesNotContainIgnoringCase("FOREIGN KEY");
     }
 
+    @Test
+    void v5CreatesNumberFavoriteTableWithoutDatabaseForeignKeys() {
+        String migration = readMigration("db/migration/V5__create_lottery_number_favorites_table.sql");
+
+        assertThat(migration).contains("CREATE TABLE lottery_number_favorites");
+        assertThat(migration).contains("user_id BIGINT NOT NULL");
+        assertThat(migration).contains("lottery_type VARCHAR(16) NOT NULL");
+        assertThat(migration).contains("front_numbers VARCHAR(32) NOT NULL");
+        assertThat(migration).contains("back_numbers VARCHAR(16) NOT NULL");
+        assertThat(migration).contains("favorite_name VARCHAR(64) NULL");
+        assertThat(migration).contains("remark VARCHAR(255) NULL");
+        assertThat(migration).contains("status VARCHAR(32) NOT NULL");
+        assertThat(migration).contains("favorite_time DATETIME NOT NULL");
+        assertThat(migration).contains("effective_time DATETIME NOT NULL");
+        assertThat(migration).contains("cancel_time DATETIME NULL");
+        assertThat(migration).contains("create_time");
+        assertThat(migration).contains("update_time");
+        assertThat(migration).contains(
+                "UNIQUE KEY uk_user_lottery_numbers (user_id, lottery_type, front_numbers, back_numbers)");
+        assertThat(migration).contains("KEY idx_user_status_time (user_id, status, effective_time)");
+        assertThat(migration).doesNotContainIgnoringCase("FOREIGN KEY");
+    }
+
     private String readMigration(String resourcePath) {
         URL resource = getClass().getClassLoader().getResource(resourcePath);
 

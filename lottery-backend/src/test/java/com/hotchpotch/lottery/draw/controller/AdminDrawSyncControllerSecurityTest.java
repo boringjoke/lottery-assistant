@@ -13,13 +13,18 @@ import com.hotchpotch.lottery.draw.record.LotterySyncTaskPageResponse;
 import com.hotchpotch.lottery.draw.record.LotterySyncTaskStatisticsResponse;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncTaskService;
 import com.hotchpotch.lottery.draw.service.LotteryDrawSyncService;
+import com.hotchpotch.lottery.user.record.AuthSession;
+import com.hotchpotch.lottery.user.service.AuthSessionService;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -41,11 +46,46 @@ class AdminDrawSyncControllerSecurityTest {
     @MockitoBean
     private SyncProperties syncProperties;
 
+    @MockitoBean
+    private AuthSessionService authSessionService;
+
+    @BeforeEach
+    void setUpAdminSession() {
+        when(authSessionService.findSession("admin-token"))
+                .thenReturn(Optional.of(session("admin-token", List.of("USER", "ADMIN"))));
+    }
+
     /**
-     * 验证本地管理端同步接口不需要 Basic Auth 也可以通过安全过滤链。
+     * 验证管理端同步接口未登录时返回 401。
      */
     @Test
-    void syncLatestDrawAllowsLocalManualCallWithoutBasicAuth() throws Exception {
+    void syncLatestDrawRejectsAnonymousAccess() throws Exception {
+        mockMvc.perform(post("/api/admin/draws/sync/latest"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    /**
+     * 验证普通用户访问管理端同步接口返回 403。
+     */
+    @Test
+    void syncLatestDrawRejectsUserRole() throws Exception {
+        when(authSessionService.findSession("user-token"))
+                .thenReturn(Optional.of(session("user-token", List.of("USER"))));
+
+        mockMvc.perform(post("/api/admin/draws/sync/latest")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer user-token"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    /**
+     * 验证管理员可以访问管理端同步接口。
+     */
+    @Test
+    void syncLatestDrawAllowsAdminAccess() throws Exception {
         when(syncService.syncLatestDraw("ADMIN")).thenReturn(new LotteryDrawSyncResult(
                 "DLT-LATEST-001",
                 "DLT",
@@ -55,7 +95,8 @@ class AdminDrawSyncControllerSecurityTest {
                 0,
                 0));
 
-        mockMvc.perform(post("/api/admin/draws/sync/latest"))
+        mockMvc.perform(post("/api/admin/draws/sync/latest")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer admin-token"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("SUCCESS"));
@@ -76,6 +117,7 @@ class AdminDrawSyncControllerSecurityTest {
                 0));
 
         mockMvc.perform(post("/api/admin/draws/sync/historyPage")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer admin-token")
                         .param("pageNo", "1")
                         .param("pageSize", "20"))
                 .andExpect(status().isOk())
@@ -88,9 +130,11 @@ class AdminDrawSyncControllerSecurityTest {
      */
     @Test
     void removedHistoryPagesAndHistoryAllEndpointsReturnNotFound() throws Exception {
-        mockMvc.perform(post("/api/admin/draws/sync/historyPages"))
+        mockMvc.perform(post("/api/admin/draws/sync/historyPages")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer admin-token"))
                 .andExpect(status().isNotFound());
-        mockMvc.perform(post("/api/admin/draws/sync/historyAll"))
+        mockMvc.perform(post("/api/admin/draws/sync/historyAll")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer admin-token"))
                 .andExpect(status().isNotFound());
     }
 
@@ -112,6 +156,7 @@ class AdminDrawSyncControllerSecurityTest {
                         0));
 
         mockMvc.perform(post("/api/admin/draws/sync/history")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer admin-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -141,6 +186,7 @@ class AdminDrawSyncControllerSecurityTest {
                 List.of()));
 
         mockMvc.perform(post("/api/admin/draws/sync/tasks")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer admin-token")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -168,7 +214,8 @@ class AdminDrawSyncControllerSecurityTest {
                 LocalDateTime.of(2026, 7, 16, 11, 0),
                 "crawler timeout"));
 
-        mockMvc.perform(get("/api/admin/draws/sync/tasks/statistics"))
+        mockMvc.perform(get("/api/admin/draws/sync/tasks/statistics")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer admin-token"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.runningCount").value(1))
@@ -190,10 +237,21 @@ class AdminDrawSyncControllerSecurityTest {
                         0,
                         0));
 
-        mockMvc.perform(post("/api/admin/draws/sync/tasks/DLT-HISTORY-FAILED-001/retry"))
+        mockMvc.perform(post("/api/admin/draws/sync/tasks/DLT-HISTORY-FAILED-001/retry")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer admin-token"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.status").value("PENDING"));
+    }
+
+    private AuthSession session(String token, List<String> roles) {
+        return new AuthSession(
+                token,
+                10L,
+                "管理员",
+                null,
+                roles,
+                LocalDateTime.of(2026, 7, 18, 12, 0));
     }
 }
 

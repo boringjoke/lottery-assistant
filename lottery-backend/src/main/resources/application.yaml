@@ -8,10 +8,12 @@ spring:
     password: ${LOTTERY_DB_PASSWORD:lottery1991.}
   data:
     redis:
-      host: ${LOTTERY_REDIS_HOST:192.168.0.189}
+      host: ${LOTTERY_REDIS_HOST:127.0.0.1}
       port: ${LOTTERY_REDIS_PORT:6379}
       password: ${LOTTERY_REDIS_PASSWORD:}
       database: ${LOTTERY_REDIS_DATABASE:1}
+      timeout: ${LOTTERY_REDIS_TIMEOUT:3s}
+      connect-timeout: ${LOTTERY_REDIS_CONNECT_TIMEOUT:3s}
   flyway:
     enabled: ${LOTTERY_FLYWAY_ENABLED:true}
     locations: classpath:db/migration
@@ -36,3 +38,5 @@ lottery:
     default-page-delay-millis: ${LOTTERY_SYNC_DEFAULT_PAGE_DELAY_MILLIS:2000}
     task-delay-millis: ${LOTTERY_SYNC_TASK_DELAY_MILLIS:10000}
     max-pages-per-task: ${LOTTERY_SYNC_MAX_PAGES_PER_TASK:20}
+  auth:
+    session-ttl-seconds: ${LOTTERY_AUTH_SESSION_TTL_SECONDS:604800}

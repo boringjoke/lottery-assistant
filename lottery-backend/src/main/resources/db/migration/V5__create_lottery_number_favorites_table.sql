@@ -1,0 +1,20 @@
+CREATE TABLE lottery_number_favorites (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    user_id BIGINT NOT NULL COMMENT '用户 ID，由业务代码保证关联有效',
+    lottery_type VARCHAR(16) NOT NULL COMMENT '彩票类型编码，MVP 固定为 DLT',
+    front_numbers VARCHAR(32) NOT NULL COMMENT '前区号码，升序逗号分隔，如 01,05,12,23,35',
+    back_numbers VARCHAR(16) NOT NULL COMMENT '后区号码，升序逗号分隔，如 03,11',
+    favorite_name VARCHAR(64) NULL COMMENT '收藏名称，用户可编辑；为空时使用默认号码名称',
+    remark VARCHAR(255) NULL COMMENT '备注',
+    status VARCHAR(32) NOT NULL COMMENT '收藏状态：ACTIVE、CANCELLED',
+    favorite_time DATETIME NOT NULL COMMENT '首次收藏时间',
+    effective_time DATETIME NOT NULL COMMENT '当前生效时间；重新启用时更新',
+    cancel_time DATETIME NULL COMMENT '取消收藏时间',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_user_lottery_numbers (user_id, lottery_type, front_numbers, back_numbers),
+    KEY idx_user_status_time (user_id, status, effective_time),
+    KEY idx_lottery_numbers (lottery_type, front_numbers, back_numbers),
+    KEY idx_create_time (create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户收藏号码表';

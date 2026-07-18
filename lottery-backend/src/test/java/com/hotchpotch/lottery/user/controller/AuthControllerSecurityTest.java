@@ -1,15 +1,18 @@
-package com.hotchpotch.lottery.draw.controller;
+package com.hotchpotch.lottery.user.controller;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.hotchpotch.lottery.config.AuthProperties;
 import com.hotchpotch.lottery.config.SecurityConfig;
-import com.hotchpotch.lottery.draw.record.LotteryDltAnalyzeRequest;
-import com.hotchpotch.lottery.draw.record.LotteryDltAnalyzeResponse;
-import com.hotchpotch.lottery.draw.service.LotteryDltAnalyzeService;
+import com.hotchpotch.lottery.user.record.AuthSession;
+import com.hotchpotch.lottery.user.record.LoginResponse;
+import com.hotchpotch.lottery.user.record.PasswordLoginRequest;
 import com.hotchpotch.lottery.user.service.AuthSessionService;
+import com.hotchpotch.lottery.user.service.UserAuthService;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,47 +23,47 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-@WebMvcTest(LotteryDltAnalyzeController.class)
+@WebMvcTest(AuthController.class)
 @AutoConfigureMockMvc
 @Import(SecurityConfig.class)
-class LotteryDltAnalyzeControllerSecurityTest {
+class AuthControllerSecurityTest {
 
     @Autowired
     private MockMvc mockMvc;
 
     @MockitoBean
-    private LotteryDltAnalyzeService analyzeService;
+    private UserAuthService userAuthService;
 
     @MockitoBean
     private AuthSessionService authSessionService;
 
-    /**
-     * 验证公开号码分析接口不需要 Basic Auth 也可以通过安全过滤链。
-     */
-    @Test
-    void analyzeDltNumbersAllowsAnonymousAccess() throws Exception {
-        when(analyzeService.analyze(new LotteryDltAnalyzeRequest(List.of("01 05 12 23 35 + 03 11"))))
-                .thenReturn(new LotteryDltAnalyzeResponse(
-                        1,
-                        1,
-                        0,
-                        0,
-                        null,
-                        "未中奖",
-                        List.of()));
+    @MockitoBean
+    private AuthProperties authProperties;
 
-        mockMvc.perform(post("/api/lottery/dlt/analyze")
+    @Test
+    void loginAllowsAnonymousAccess() throws Exception {
+        LoginResponse loginResponse = new LoginResponse(10L, "管理员", null, List.of("USER"));
+        when(userAuthService.loginWithPassword(new PasswordLoginRequest("admin", "Admin@123456")))
+                .thenReturn(loginResponse);
+        when(authProperties.sessionTtlSeconds()).thenReturn(604800L);
+        when(authSessionService.createSession(loginResponse)).thenReturn(new AuthSession(
+                "token-001",
+                10L,
+                "管理员",
+                null,
+                List.of("USER"),
+                LocalDateTime.of(2026, 7, 18, 12, 0)));
+
+        mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                    "numbers": [
-                                        "01 05 12 23 35 + 03 11"
-                                    ]
+                                    "account": "admin",
+                                    "password": "Admin@123456"
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.totalNumberCount").value(1))
-                .andExpect(jsonPath("$.data.analyzedDrawCount").value(1));
+                .andExpect(jsonPath("$.data.token").value("token-001"));
     }
 }
