@@ -56,7 +56,7 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   const payload = await readApiResponse<T>(response)
   if (!response.ok) {
     throw new ApiError(
-      payload?.message || `请求失败：${response.status}`,
+      payload?.message || httpStatusMessage(response.status),
       payload?.code || 'HTTP_STATUS_ERROR',
       response.status,
     )
@@ -81,6 +81,17 @@ async function readApiResponse<T>(response: Response): Promise<ApiResponse<T> | 
   } catch {
     return null
   }
+}
+
+/**
+ * 将无后端业务响应的 HTTP 状态转换为用户可理解的文案。
+ */
+function httpStatusMessage(status: number): string {
+  if (status === 502 || status === 503 || status === 504) {
+    return '后端服务暂不可用，请等待管理员恢复。'
+  }
+
+  return `请求失败：${status}`
 }
 
 /**

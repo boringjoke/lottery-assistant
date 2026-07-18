@@ -27,4 +27,21 @@ describe('http request', () => {
 
     fetchMock.mockRestore()
   })
+
+  it('uses friendly service unavailable message when proxy returns 502 without ApiResponse', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('Bad Gateway', {
+        status: 502,
+        headers: { 'Content-Type': 'text/plain' },
+      }),
+    )
+
+    await expect(post('/api/draws/dlt', {})).rejects.toMatchObject<ApiError>({
+      message: '后端服务暂不可用，请等待管理员恢复。',
+      code: 'HTTP_STATUS_ERROR',
+      status: 502,
+    })
+
+    fetchMock.mockRestore()
+  })
 })

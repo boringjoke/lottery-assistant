@@ -200,6 +200,13 @@ defineEmits<{
   background: #f8fafc;
 }
 
+.dialog-footer .primary-button {
+  width: auto;
+  min-width: 88px;
+  flex: 0 0 auto;
+  padding: 0 22px;
+}
+
 .detail-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -286,8 +293,15 @@ defineEmits<{
 }
 
 .prize-table-wrap {
+  overflow-x: hidden;
   border: 1px solid #f1f5f9;
   border-radius: 14px;
+}
+
+.prize-table-wrap :deep(table) {
+  width: 100%;
+  min-width: 0 !important;
+  table-layout: fixed;
 }
 
 .prize-table-wrap :deep(thead th) {
@@ -295,7 +309,13 @@ defineEmits<{
   padding-top: 0;
   padding-bottom: 0;
   background: #f8fafc;
+  text-align: center;
   vertical-align: middle;
+}
+
+.prize-table-wrap :deep(tbody td) {
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .prize-table-wrap :deep(thead th:first-child) {
@@ -307,7 +327,7 @@ defineEmits<{
 }
 
 .align-right {
-  text-align: right;
+  text-align: right !important;
 }
 
 .source-info {

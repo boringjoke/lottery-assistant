@@ -643,7 +643,13 @@ function formatResultNumbers(numberResult: LotteryDltAnalyzeNumberResult) {
 
 .input-actions {
   display: flex;
+  flex: 0 0 auto;
   gap: 12px;
+}
+
+.input-actions > button {
+  min-width: 96px;
+  white-space: nowrap;
 }
 
 .rule-tip {

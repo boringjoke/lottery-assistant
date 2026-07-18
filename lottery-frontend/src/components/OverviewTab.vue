@@ -171,7 +171,7 @@ onUnmounted(() => {
         </div>
 
         <div class="table-scroll">
-          <table v-if="recentDraws.length" class="data-table">
+          <table v-if="recentDraws.length" class="data-table recent-draw-table">
             <thead>
               <tr>
                 <th>期号</th>
@@ -416,8 +416,37 @@ onUnmounted(() => {
   padding: 24px;
 }
 
+.recent-draw-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.recent-draw-table th {
+  border-bottom-color: #e2e8f0;
+  background: #f8fafc;
+  padding: 12px;
+  text-align: center;
+}
+
+.recent-draw-table th:first-child {
+  border-top-left-radius: 10px;
+}
+
+.recent-draw-table th:last-child {
+  border-top-right-radius: 10px;
+}
+
+.recent-draw-table td {
+  border-bottom-color: #eef2f7;
+  text-align: center;
+}
+
 .operation-cell {
   text-align: right;
+}
+
+.recent-draw-table .operation-cell {
+  text-align: center;
 }
 
 .overview-note {

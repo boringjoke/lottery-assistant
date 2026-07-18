@@ -161,7 +161,7 @@ onMounted(loadHistory)
           <div v-if="loading" class="table-refreshing" role="status">正在刷新开奖记录</div>
           <div v-if="error" class="table-error">{{ error }}</div>
           <div class="table-scroll">
-          <table class="data-table">
+          <table class="data-table draw-history-table">
             <thead>
               <tr>
                 <th>期号</th>
@@ -303,18 +303,22 @@ onMounted(loadHistory)
   display: flex;
   gap: 12px;
   margin-left: auto;
+  flex: 0 0 auto;
 }
 
 .filter-action-button {
+  min-width: 96px;
   min-height: 44px;
   padding: 0 24px;
   font-size: 15px;
+  white-space: nowrap;
 }
 
 .button-icon {
   display: inline-flex;
   width: 19px;
   height: 19px;
+  flex: 0 0 19px;
   align-items: center;
   justify-content: center;
   margin-right: 8px;
@@ -341,6 +345,31 @@ onMounted(loadHistory)
 
 .table-region {
   position: relative;
+}
+
+.draw-history-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.draw-history-table th {
+  border-bottom-color: #e2e8f0;
+  background: #f8fafc;
+  padding: 12px;
+  text-align: center;
+}
+
+.draw-history-table th:first-child {
+  border-top-left-radius: 10px;
+}
+
+.draw-history-table th:last-child {
+  border-top-right-radius: 10px;
+}
+
+.draw-history-table td {
+  border-bottom-color: #eef2f7;
+  text-align: center;
 }
 
 .table-region--loading .data-table {
