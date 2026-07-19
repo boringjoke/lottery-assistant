@@ -28,12 +28,12 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers("/api/lottery/favorites/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/api/draws/**",
                                 "/api/lottery/**",
-                                "/error")
-                        .permitAll()
+                                "/error").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated())
                 .exceptionHandling(exception -> exception

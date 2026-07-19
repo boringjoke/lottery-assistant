@@ -20,6 +20,13 @@ class ApplicationYamlTest {
         assertThat(yaml).doesNotContain("192.168.0.189");
     }
 
+    @Test
+    void favoriteMaxActiveCountDefaultsToOneHundred() {
+        String yaml = readResource("application.yaml");
+
+        assertThat(yaml).contains("max-active-count: ${LOTTERY_FAVORITE_MAX_ACTIVE_COUNT:100}");
+    }
+
     private String readResource(String resourcePath) {
         URL resource = getClass().getClassLoader().getResource(resourcePath);
 

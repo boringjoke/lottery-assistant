@@ -53,8 +53,23 @@ class LotteryNumberFavoriteRepositoryTest {
 
         LotteryNumberFavoriteRepository repository = new LotteryNumberFavoriteRepository(mapper);
 
-        assertThat(repository.findPageByUserIdAndStatus(10L, "ACTIVE", 1, 20)).containsExactly(favorite);
+        assertThat(repository.findPageByUserIdAndStatus(10L, "ACTIVE", null, 1, 20)).containsExactly(favorite);
         assertThat(repository.countByUserIdAndStatus(10L, "ACTIVE")).isEqualTo(1L);
+        verify(mapper).selectList(anyFavoriteWrapper());
+        verify(mapper).selectCount(anyFavoriteWrapper());
+    }
+
+    @Test
+    void repositoryFindsPageAndCountsByKeyword() {
+        LotteryNumberFavoriteMapper mapper = mock(LotteryNumberFavoriteMapper.class);
+        LotteryNumberFavorite favorite = new LotteryNumberFavorite();
+        when(mapper.selectList(anyFavoriteWrapper())).thenReturn(java.util.List.of(favorite));
+        when(mapper.selectCount(anyFavoriteWrapper())).thenReturn(1L);
+
+        LotteryNumberFavoriteRepository repository = new LotteryNumberFavoriteRepository(mapper);
+
+        assertThat(repository.findPageByUserIdAndStatus(10L, "ACTIVE", "蓝号", 1, 20)).containsExactly(favorite);
+        assertThat(repository.countByUserIdAndStatusAndKeyword(10L, "ACTIVE", "蓝号")).isEqualTo(1L);
         verify(mapper).selectList(anyFavoriteWrapper());
         verify(mapper).selectCount(anyFavoriteWrapper());
     }

@@ -52,13 +52,14 @@ public class LotteryNumberFavoriteRepository {
     public List<LotteryNumberFavorite> findPageByUserIdAndStatus(
             Long userId,
             String status,
+            String keyword,
             int pageNo,
             int pageSize) {
         int safePageNo = Math.max(pageNo, 1);
         int safePageSize = Math.max(pageSize, 1);
         int offset = (safePageNo - 1) * safePageSize;
 
-        return lotteryNumberFavoriteMapper.selectList(baseUserStatusQuery(userId, status)
+        return lotteryNumberFavoriteMapper.selectList(baseUserQuery(userId, status, keyword)
                 .orderByDesc(LotteryNumberFavorite::getEffectiveTime)
                 .orderByDesc(LotteryNumberFavorite::getId)
                 .last("LIMIT " + safePageSize + " OFFSET " + offset));
@@ -68,7 +69,14 @@ public class LotteryNumberFavoriteRepository {
      * 按用户和状态统计收藏号码数量。
      */
     public Long countByUserIdAndStatus(Long userId, String status) {
-        return lotteryNumberFavoriteMapper.selectCount(baseUserStatusQuery(userId, status));
+        return countByUserIdAndStatusAndKeyword(userId, status, null);
+    }
+
+    /**
+     * 按用户、状态和关键字统计收藏号码数量。
+     */
+    public Long countByUserIdAndStatusAndKeyword(Long userId, String status, String keyword) {
+        return lotteryNumberFavoriteMapper.selectCount(baseUserQuery(userId, status, keyword));
     }
 
     /**
@@ -88,11 +96,20 @@ public class LotteryNumberFavoriteRepository {
     /**
      * 构建用户收藏分页和统计共用查询条件。
      */
-    private LambdaQueryWrapper<LotteryNumberFavorite> baseUserStatusQuery(Long userId, String status) {
+    private LambdaQueryWrapper<LotteryNumberFavorite> baseUserQuery(Long userId, String status, String keyword) {
         LambdaQueryWrapper<LotteryNumberFavorite> queryWrapper = Wrappers.<LotteryNumberFavorite>lambdaQuery()
                 .eq(LotteryNumberFavorite::getUserId, userId);
         if (status != null && !status.isBlank()) {
             queryWrapper.eq(LotteryNumberFavorite::getStatus, status.trim());
+        }
+        if (keyword != null && !keyword.isBlank()) {
+            String trimmedKeyword = keyword.trim();
+            queryWrapper.and(wrapper -> wrapper
+                    .like(LotteryNumberFavorite::getFavoriteName, trimmedKeyword)
+                    .or()
+                    .like(LotteryNumberFavorite::getFrontNumbers, trimmedKeyword)
+                    .or()
+                    .like(LotteryNumberFavorite::getBackNumbers, trimmedKeyword));
         }
 
         return queryWrapper;
