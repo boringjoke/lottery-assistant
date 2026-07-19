@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AdminLotterySyncView from '@/views/AdminLotterySyncView.vue'
+import FavoritesView from '@/views/FavoritesView.vue'
 import LoginView from '@/views/LoginView.vue'
 import LotteryAssistantView from '@/views/LotteryAssistantView.vue'
 import ProfileView from '@/views/ProfileView.vue'
@@ -25,6 +26,11 @@ const router = createRouter({
       path: '/profile',
       name: 'profile',
       component: ProfileView,
+    },
+    {
+      path: '/profile/favorites',
+      name: 'profile-favorites',
+      component: FavoritesView,
     },
     {
       path: '/admin/lottery-sync',

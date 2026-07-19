@@ -151,10 +151,10 @@ onMounted(loadProfile)
             <span class="profile-nav__dot" aria-hidden="true"></span>
             <span>个人资料</span>
           </RouterLink>
-          <button class="profile-nav__item" type="button" disabled>
+          <RouterLink class="profile-nav__item" to="/profile/favorites">
             <span class="profile-nav__dot" aria-hidden="true"></span>
             <span>我的收藏</span>
-          </button>
+          </RouterLink>
         </nav>
       </aside>
 
@@ -354,11 +354,6 @@ onMounted(loadProfile)
 .profile-nav__item.active {
   background: #eff6ff;
   color: #2563eb;
-}
-
-.profile-nav__item:disabled {
-  color: #cbd5e1;
-  cursor: not-allowed;
 }
 
 .profile-nav__dot {

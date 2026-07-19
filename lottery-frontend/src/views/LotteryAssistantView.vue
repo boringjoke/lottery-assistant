@@ -192,7 +192,7 @@ onMounted(loadCurrentUser)
         @open-detail="openDetail"
       />
       <HistoryTab v-else-if="activeTab === 'history'" @open-detail="openDetail" />
-      <AnalyzeTab v-else />
+      <AnalyzeTab v-else :current-user="currentUser" />
     </main>
 
     <DrawDetailDialog

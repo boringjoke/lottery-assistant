@@ -7,6 +7,7 @@ import loginNotHoverIconUrl from '@/assets/icons/login-not-hover.svg'
 import logoutIconUrl from '@/assets/icons/logout.svg'
 import manageIconUrl from '@/assets/icons/manage.svg'
 import profileIconUrl from '@/assets/icons/profile.svg'
+import favoriteIconUrl from '@/assets/icons/favorite.svg'
 import type { CurrentUser } from '@/types/auth'
 
 const props = defineProps<{
@@ -42,6 +43,11 @@ function goLogin() {
 function goProfile() {
   menuOpen.value = false
   void router.push('/profile')
+}
+
+function goFavorites() {
+  menuOpen.value = false
+  void router.push('/profile/favorites')
 }
 
 function goAdminSync() {
@@ -93,6 +99,10 @@ function handleLogout() {
         <button type="button" role="menuitem" @click="goProfile">
           <img class="account-menu__icon" :src="profileIconUrl" alt="" aria-hidden="true" />
           <span>个人中心</span>
+        </button>
+        <button type="button" role="menuitem" @click="goFavorites">
+          <img class="account-menu__icon" :src="favoriteIconUrl" alt="" aria-hidden="true" />
+          <span>我的收藏</span>
         </button>
         <button v-if="isAdmin" type="button" role="menuitem" @click="goAdminSync">
           <img class="account-menu__icon" :src="manageIconUrl" alt="" aria-hidden="true" />

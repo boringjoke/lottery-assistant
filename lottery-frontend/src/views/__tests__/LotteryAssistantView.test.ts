@@ -71,10 +71,11 @@ describe('LotteryAssistantView', () => {
     await wrapper.find('.account-trigger').trigger('click')
 
     expect(wrapper.text()).toContain('个人中心')
+    expect(wrapper.text()).toContain('我的收藏')
     expect(wrapper.text()).toContain('数据同步管理')
     expect(wrapper.text()).toContain('退出登录')
 
-    await wrapper.findAll('.account-menu button')[2].trigger('click')
+    await wrapper.findAll('.account-menu button')[3].trigger('click')
     await flushPromises()
 
     expect(logout).toHaveBeenCalledOnce()

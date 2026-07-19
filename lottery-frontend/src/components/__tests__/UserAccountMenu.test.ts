@@ -49,12 +49,18 @@ describe('UserAccountMenu', () => {
 
     expect(wrapper.text()).toContain('普通用户')
     expect(wrapper.text()).toContain('个人中心')
+    expect(wrapper.text()).toContain('我的收藏')
     expect(wrapper.text()).toContain('退出登录')
     expect(wrapper.text()).not.toContain('数据同步管理')
 
     await wrapper.findAll('.account-menu button')[0].trigger('click')
 
     expect(push).toHaveBeenCalledWith('/profile')
+
+    await wrapper.find('.account-trigger').trigger('click')
+    await wrapper.findAll('.account-menu button')[1].trigger('click')
+
+    expect(push).toHaveBeenCalledWith('/profile/favorites')
   })
 
   it('shows admin sync entry for admin user', async () => {
@@ -71,9 +77,10 @@ describe('UserAccountMenu', () => {
 
     await wrapper.find('.account-trigger').trigger('click')
 
+    expect(wrapper.text()).toContain('我的收藏')
     expect(wrapper.text()).toContain('数据同步管理')
 
-    await wrapper.findAll('.account-menu button')[1].trigger('click')
+    await wrapper.findAll('.account-menu button')[2].trigger('click')
 
     expect(push).toHaveBeenCalledWith('/admin/lottery-sync')
   })
@@ -91,7 +98,7 @@ describe('UserAccountMenu', () => {
     })
 
     await wrapper.find('.account-trigger').trigger('click')
-    await wrapper.findAll('.account-menu button')[2].trigger('click')
+    await wrapper.findAll('.account-menu button')[3].trigger('click')
 
     expect(wrapper.emitted('logout')).toHaveLength(1)
     expect(wrapper.find('.account-menu').exists()).toBe(false)

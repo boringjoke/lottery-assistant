@@ -1,12 +1,24 @@
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import AnalyzeTab from '../AnalyzeTab.vue'
+import { createFavorite } from '@/api/favorites'
 import { analyzeDltNumbers } from '@/api/lottery'
 import type { LotteryDltAnalyzeResponse } from '@/types/lottery'
 
+const push = vi.fn()
+
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ fullPath: '/lottery-assistant?tab=analyze' }),
+  useRouter: () => ({ push }),
+}))
+
 vi.mock('@/api/lottery', () => ({
   analyzeDltNumbers: vi.fn(),
+}))
+
+vi.mock('@/api/favorites', () => ({
+  createFavorite: vi.fn(),
 }))
 
 const analyzeResponse: LotteryDltAnalyzeResponse = {
@@ -32,10 +44,75 @@ const analyzeResponse: LotteryDltAnalyzeResponse = {
   ],
 }
 
+const analyzeResponseWithHitDetails: LotteryDltAnalyzeResponse = {
+  ...analyzeResponse,
+  winningNumberCount: 1,
+  winningHitCount: 1,
+  bestPrizeLevel: 9,
+  bestPrizeName: '九等奖',
+  results: [
+    {
+      ...analyzeResponse.results[0],
+      winning: true,
+      winningHitCount: 1,
+      bestPrizeLevel: 9,
+      bestPrizeName: '九等奖',
+      hitDetails: [
+        {
+          issueNo: '25001',
+          drawDate: '2025-01-01',
+          drawFrontNumbers: [1, 5, 12, 23, 35],
+          drawBackNumbers: [3, 11],
+          frontHitCount: 5,
+          backHitCount: 2,
+          prizeLevel: 9,
+          prizeName: '九等奖',
+        },
+      ],
+    },
+  ],
+}
+
+const analyzeResponseWithManyHitDetails: LotteryDltAnalyzeResponse = {
+  ...analyzeResponseWithHitDetails,
+  winningHitCount: 12,
+  results: [
+    {
+      ...analyzeResponseWithHitDetails.results[0],
+      winningHitCount: 12,
+      hitDetails: Array.from({ length: 12 }, (_, index) => ({
+        issueNo: `250${String(index + 1).padStart(2, '0')}`,
+        drawDate: `2025-01-${String(index + 1).padStart(2, '0')}`,
+        drawFrontNumbers: [1, 5, 12, 23, 35],
+        drawBackNumbers: [3, 11],
+        frontHitCount: 5,
+        backHitCount: 2,
+        prizeLevel: 9,
+        prizeName: '九等奖',
+      })),
+    },
+  ],
+}
+
 describe('AnalyzeTab', () => {
   beforeEach(() => {
+    push.mockReset()
     vi.mocked(analyzeDltNumbers).mockReset()
+    vi.mocked(createFavorite).mockReset()
     vi.mocked(analyzeDltNumbers).mockResolvedValue(analyzeResponse)
+    vi.mocked(createFavorite).mockResolvedValue({
+      id: 101,
+      lotteryType: 'DLT',
+      frontNumbers: '01,05,12,23,35',
+      backNumbers: '03,11',
+      displayText: '01 05 12 23 35 + 03 11',
+      favoriteName: '01 05 12 23 35 + 03 11',
+      remark: '来自号码分析结果',
+      status: 'ACTIVE',
+      favoriteTime: '2026-07-19T10:00:00',
+      effectiveTime: '2026-07-19T10:00:00',
+      cancelTime: null,
+    })
   })
 
   it('submits single input as backend numbers array', async () => {
@@ -150,5 +227,105 @@ describe('AnalyzeTab', () => {
 
     expect(analyzeDltNumbers).not.toHaveBeenCalled()
     expect(wrapper.text()).toContain('第1行：前区号码范围必须为 01-35')
+  })
+
+  it('uses dedicated table style for hit detail list', async () => {
+    vi.mocked(analyzeDltNumbers).mockResolvedValue(analyzeResponseWithHitDetails)
+    const wrapper = mount(AnalyzeTab)
+    const inputs = wrapper.findAll('input.number-input')
+    const values = ['01', '05', '12', '23', '35', '03', '11']
+
+    for (const [index, value] of values.entries()) {
+      await inputs[index]?.setValue(value)
+    }
+    await wrapper.find('button.primary-button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('table.hit-detail-table').exists()).toBe(true)
+    expect(wrapper.findAll('.hit-detail-table th').map((header) => header.text())).toEqual([
+      '输入号码',
+      '命中期号',
+      '命中日期',
+      '开奖号码',
+      '前区命中',
+      '后区命中',
+      '奖级',
+    ])
+  })
+
+  it('paginates hit detail list locally', async () => {
+    vi.mocked(analyzeDltNumbers).mockResolvedValue(analyzeResponseWithManyHitDetails)
+    const wrapper = mount(AnalyzeTab)
+    const inputs = wrapper.findAll('input.number-input')
+    const values = ['01', '05', '12', '23', '35', '03', '11']
+
+    for (const [index, value] of values.entries()) {
+      await inputs[index]?.setValue(value)
+    }
+    await wrapper.find('button.primary-button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('.hit-detail-table tbody tr')).toHaveLength(10)
+    expect(wrapper.text()).toContain('共 12 条，第 1 / 2 页')
+    expect(wrapper.text()).toContain('25010')
+    expect(wrapper.text()).not.toContain('25011')
+
+    await wrapper.find('[data-test="hit-detail-next-page"]').trigger('click')
+
+    expect(wrapper.findAll('.hit-detail-table tbody tr')).toHaveLength(2)
+    expect(wrapper.text()).toContain('共 12 条，第 2 / 2 页')
+    expect(wrapper.text()).toContain('25011')
+    expect(wrapper.text()).toContain('25012')
+  })
+
+  it('creates favorite from analyze result when user is logged in', async () => {
+    const wrapper = mount(AnalyzeTab, {
+      props: {
+        currentUser: {
+          userId: 10,
+          nickname: '本地普通用户',
+          avatarUrl: null,
+          roles: ['USER'],
+        },
+      },
+    })
+    const inputs = wrapper.findAll('input.number-input')
+    const values = ['01', '05', '12', '23', '35', '03', '11']
+
+    for (const [index, value] of values.entries()) {
+      await inputs[index]?.setValue(value)
+    }
+    await wrapper.find('button.primary-button').trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-test="favorite-analyze-number"]').trigger('click')
+    await flushPromises()
+
+    expect(createFavorite).toHaveBeenCalledWith({
+      lotteryType: 'DLT',
+      frontNumbers: [1, 5, 12, 23, 35],
+      backNumbers: [3, 11],
+      favoriteName: '01 05 12 23 35 + 03 11',
+      remark: '来自号码分析结果',
+    })
+    expect(wrapper.text()).toContain('号码已收藏')
+  })
+
+  it('redirects guest to login before favorite analyze result', async () => {
+    const wrapper = mount(AnalyzeTab)
+    const inputs = wrapper.findAll('input.number-input')
+    const values = ['01', '05', '12', '23', '35', '03', '11']
+
+    for (const [index, value] of values.entries()) {
+      await inputs[index]?.setValue(value)
+    }
+    await wrapper.find('button.primary-button').trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-test="login-before-favorite"]').trigger('click')
+
+    expect(createFavorite).not.toHaveBeenCalled()
+    expect(push).toHaveBeenCalledWith({
+      path: '/login',
+      query: { redirect: '/lottery-assistant?tab=analyze' },
+    })
   })
 })

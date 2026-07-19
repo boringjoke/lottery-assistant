@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed, ref, type ComponentPublicInstance } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
+import { createFavorite } from '@/api/favorites'
 import { analyzeDltNumbers } from '@/api/lottery'
+import AppToast from '@/components/AppToast.vue'
 import LotteryNumberGroup from '@/components/LotteryNumberGroup.vue'
 import StateMessage from '@/components/StateMessage.vue'
+import type { CurrentUser } from '@/types/auth'
 import type {
   LotteryDltAnalyzeHitDetail,
   LotteryDltAnalyzeNumberResult,
@@ -23,14 +27,25 @@ interface FlattenHitDetail extends LotteryDltAnalyzeHitDetail {
   displayText: string
 }
 
+const props = defineProps<{
+  currentUser?: CurrentUser | null
+}>()
+
+const route = useRoute()
+const router = useRouter()
 const inputMode = ref<InputMode>('single')
 const frontNumbers = ref(['', '', '', '', ''])
 const backNumbers = ref(['', ''])
 const batchText = ref('')
 const analyzing = ref(false)
 const error = ref('')
+const toastMessage = ref('')
+const toastType = ref<'success' | 'error' | 'info'>('info')
+const favoriteSavingLineNo = ref<number | null>(null)
 const result = ref<LotteryDltAnalyzeResponse | null>(null)
 const singleInputRefs = ref<HTMLInputElement[]>([])
+const hitDetailPageNo = ref(1)
+const hitDetailPageSize = 10
 
 /**
  * 将每注结果中的中奖明细展开成表格数据，并补上对应输入号码。
@@ -45,6 +60,24 @@ const hitDetails = computed<FlattenHitDetail[]>(() => {
     ) ?? []
   )
 })
+
+const hitDetailTotalPages = computed(() => Math.max(Math.ceil(hitDetails.value.length / hitDetailPageSize), 1))
+const pagedHitDetails = computed(() => {
+  const start = (hitDetailPageNo.value - 1) * hitDetailPageSize
+
+  return hitDetails.value.slice(start, start + hitDetailPageSize)
+})
+const hasPreviousHitDetailPage = computed(() => hitDetailPageNo.value > 1)
+const hasNextHitDetailPage = computed(() => hitDetailPageNo.value < hitDetailTotalPages.value)
+
+function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
+  toastType.value = type
+  toastMessage.value = message
+}
+
+function closeToast() {
+  toastMessage.value = ''
+}
 
 /**
  * 更新前区输入框，只保留两位以内的数字。
@@ -75,7 +108,9 @@ function updateBackNumber(index: number, event: Event) {
  */
 function clearInput() {
   error.value = ''
+  closeToast()
   result.value = null
+  hitDetailPageNo.value = 1
   if (inputMode.value === 'single') {
     frontNumbers.value = ['', '', '', '', '']
     backNumbers.value = ['', '']
@@ -90,7 +125,9 @@ function clearInput() {
 function changeInputMode(mode: InputMode) {
   inputMode.value = mode
   error.value = ''
+  closeToast()
   result.value = null
+  hitDetailPageNo.value = 1
 }
 
 /**
@@ -303,9 +340,11 @@ async function submitAnalyze() {
 
   analyzing.value = true
   error.value = ''
+  closeToast()
 
   try {
     result.value = await analyzeDltNumbers({ numbers })
+    hitDetailPageNo.value = 1
   } catch (err) {
     result.value = null
     error.value = getErrorMessage(err)
@@ -323,10 +362,43 @@ function formatResultNumbers(numberResult: LotteryDltAnalyzeNumberResult) {
     back: parseNumberText(numberResult.backNumbers),
   }
 }
+
+function changeHitDetailPage(nextPageNo: number) {
+  hitDetailPageNo.value = Math.min(Math.max(nextPageNo, 1), hitDetailTotalPages.value)
+}
+
+async function favoriteAnalyzeNumber(numberResult: LotteryDltAnalyzeNumberResult) {
+  favoriteSavingLineNo.value = numberResult.lineNo
+  closeToast()
+
+  try {
+    await createFavorite({
+      lotteryType: 'DLT',
+      frontNumbers: numberResult.frontNumbers,
+      backNumbers: numberResult.backNumbers,
+      favoriteName: numberResult.displayText,
+      remark: '来自号码分析结果',
+    })
+    showToast('号码已收藏', 'success')
+  } catch (err) {
+    showToast(getErrorMessage(err), 'error')
+  } finally {
+    favoriteSavingLineNo.value = null
+  }
+}
+
+async function goLoginBeforeFavorite() {
+  await router.push({
+    path: '/login',
+    query: { redirect: route.fullPath || '/lottery-assistant?tab=analyze' },
+  })
+}
 </script>
 
 <template>
   <div class="content-container analysis-layout">
+    <AppToast :message="toastMessage" :type="toastType" @close="closeToast" />
+
     <section class="card input-card">
       <div class="input-heading">
         <div>
@@ -457,6 +529,25 @@ function formatResultNumbers(numberResult: LotteryDltAnalyzeNumberResult) {
             <span class="result-metric result-metric--prize">
               最高奖级：<strong>{{ numberResult.bestPrizeName }}</strong>
             </span>
+            <button
+              v-if="props.currentUser"
+              data-test="favorite-analyze-number"
+              class="favorite-number-button"
+              type="button"
+              :disabled="favoriteSavingLineNo === numberResult.lineNo"
+              @click="favoriteAnalyzeNumber(numberResult)"
+            >
+              {{ favoriteSavingLineNo === numberResult.lineNo ? '收藏中' : '收藏号码' }}
+            </button>
+            <button
+              v-else
+              data-test="login-before-favorite"
+              class="favorite-number-button favorite-number-button--ghost"
+              type="button"
+              @click="goLoginBeforeFavorite"
+            >
+              登录后收藏
+            </button>
           </div>
         </div>
       </section>
@@ -464,7 +555,7 @@ function formatResultNumbers(numberResult: LotteryDltAnalyzeNumberResult) {
       <section class="card hit-card">
         <h3 class="section-title">中奖明细</h3>
         <div v-if="hitDetails.length" class="table-scroll">
-          <table class="data-table">
+          <table class="data-table hit-detail-table">
             <thead>
               <tr>
                 <th>输入号码</th>
@@ -477,7 +568,7 @@ function formatResultNumbers(numberResult: LotteryDltAnalyzeNumberResult) {
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(detail, index) in hitDetails" :key="`${detail.issueNo}-${index}`">
+              <tr v-for="(detail, index) in pagedHitDetails" :key="`${detail.issueNo}-${index}`">
                 <td class="mono-cell">{{ detail.displayText }}</td>
                 <td>{{ detail.issueNo }}</td>
                 <td>{{ detail.drawDate }}</td>
@@ -499,6 +590,27 @@ function formatResultNumbers(numberResult: LotteryDltAnalyzeNumberResult) {
               </tr>
             </tbody>
           </table>
+          <div v-if="hitDetails.length > hitDetailPageSize" class="hit-detail-pagination">
+            <span>共 {{ hitDetails.length }} 条，第 {{ hitDetailPageNo }} / {{ hitDetailTotalPages }} 页</span>
+            <div>
+              <button
+                data-test="hit-detail-prev-page"
+                type="button"
+                :disabled="!hasPreviousHitDetailPage"
+                @click="changeHitDetailPage(hitDetailPageNo - 1)"
+              >
+                上一页
+              </button>
+              <button
+                data-test="hit-detail-next-page"
+                type="button"
+                :disabled="!hasNextHitDetailPage"
+                @click="changeHitDetailPage(hitDetailPageNo + 1)"
+              >
+                下一页
+              </button>
+            </div>
+          </div>
         </div>
         <StateMessage v-else title="暂无中奖明细" message="当前号码在已入库历史开奖中没有中奖记录。" />
       </section>
@@ -532,6 +644,68 @@ function formatResultNumbers(numberResult: LotteryDltAnalyzeNumberResult) {
 
 .hit-card .section-title {
   margin-bottom: 18px;
+}
+
+.hit-detail-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.hit-detail-table th {
+  border-bottom-color: #e2e8f0;
+  background: #f8fafc;
+  padding: 12px;
+}
+
+.hit-detail-table th:first-child {
+  border-top-left-radius: 10px;
+}
+
+.hit-detail-table th:last-child {
+  border-top-right-radius: 10px;
+}
+
+.hit-detail-table td {
+  border-bottom-color: #eef2f7;
+}
+
+.hit-detail-table th,
+.hit-detail-table td {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.hit-detail-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.hit-detail-pagination div {
+  display: flex;
+  gap: 8px;
+}
+
+.hit-detail-pagination button {
+  min-width: fit-content;
+  height: 34px;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.hit-detail-pagination button:disabled {
+  opacity: 0.58;
 }
 
 .title-row {
@@ -764,7 +938,7 @@ function formatResultNumbers(numberResult: LotteryDltAnalyzeNumberResult) {
 
 .result-item {
   display: grid;
-  grid-template-columns: minmax(280px, 1.2fr) repeat(3, minmax(120px, 1fr));
+  grid-template-columns: minmax(280px, 1.2fr) repeat(3, minmax(120px, 1fr)) auto;
   gap: 16px;
   align-items: center;
   padding: 16px;
@@ -797,6 +971,33 @@ function formatResultNumbers(numberResult: LotteryDltAnalyzeNumberResult) {
 .result-metric--prize {
   background: #fffbeb;
   color: #b45309;
+}
+
+.favorite-number-button {
+  display: inline-flex;
+  width: max-content;
+  min-width: 88px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.favorite-number-button--ghost {
+  border-color: #e2e8f0;
+  background: #ffffff;
+  color: #64748b;
+}
+
+.favorite-number-button:disabled {
+  opacity: 0.58;
 }
 
 .mono-cell {
@@ -849,6 +1050,11 @@ function formatResultNumbers(numberResult: LotteryDltAnalyzeNumberResult) {
 
   .stats-grid {
     grid-template-columns: 1fr;
+  }
+
+  .hit-detail-pagination {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>
