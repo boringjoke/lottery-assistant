@@ -32,4 +32,19 @@ public class CurrentUserContext {
 
         return currentUser;
     }
+
+    /**
+     * 读取当前会话 token；用于资料变更后同步刷新服务端会话缓存。
+     */
+    public String requireToken() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null
+                || !authentication.isAuthenticated()
+                || !(authentication.getCredentials() instanceof String token)
+                || token.isBlank()) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+
+        return token;
+    }
 }

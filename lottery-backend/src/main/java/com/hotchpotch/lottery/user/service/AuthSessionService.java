@@ -78,6 +78,37 @@ public class AuthSessionService {
     }
 
     /**
+     * 更新当前会话中的用户展示资料，保证 /api/auth/me 能返回最新昵称和头像。
+     */
+    public Optional<AuthSession> updateSessionProfile(String token, String nickname, String avatarUrl) {
+        Optional<AuthSession> currentSession = findSession(token);
+        if (currentSession.isEmpty()) {
+            return Optional.empty();
+        }
+
+        AuthSession session = currentSession.get();
+        AuthSession updatedSession = new AuthSession(
+                session.token(),
+                session.userId(),
+                nickname,
+                avatarUrl,
+                session.roles(),
+                session.expireTime());
+        long remainingSeconds = Duration.between(LocalDateTime.now(), session.expireTime()).toSeconds();
+        if (remainingSeconds <= 0) {
+            deleteSession(session.token());
+            return Optional.empty();
+        }
+
+        redisTemplate.opsForValue().set(
+                sessionKey(session.token()),
+                serialize(updatedSession),
+                Duration.ofSeconds(remainingSeconds));
+
+        return Optional.of(updatedSession);
+    }
+
+    /**
      * 删除登录会话。
      */
     public void deleteSession(String token) {

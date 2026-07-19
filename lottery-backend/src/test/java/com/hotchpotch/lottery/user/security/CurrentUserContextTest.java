@@ -39,6 +39,7 @@ class CurrentUserContextTest {
 
         assertThat(currentUserContext.requireUserId()).isEqualTo(10L);
         assertThat(currentUserContext.requireCurrentUser()).isSameAs(principal);
+        assertThat(currentUserContext.requireToken()).isEqualTo("token");
     }
 
     /**
@@ -47,6 +48,10 @@ class CurrentUserContextTest {
     @Test
     void requireCurrentUserRejectsMissingAuthentication() {
         assertThatThrownBy(currentUserContext::requireCurrentUser)
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.UNAUTHORIZED);
+        assertThatThrownBy(currentUserContext::requireToken)
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.UNAUTHORIZED);

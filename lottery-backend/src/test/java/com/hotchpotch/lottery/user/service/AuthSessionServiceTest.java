@@ -71,6 +71,37 @@ class AuthSessionServiceTest {
     }
 
     @Test
+    void updateSessionProfileRefreshesNicknameAndAvatarUrl() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        AuthSession createdSession = service.createSession(new LoginResponse(
+                10L,
+                "旧昵称",
+                null,
+                List.of("USER")));
+        ArgumentCaptor<String> valueCaptor = ArgumentCaptor.forClass(String.class);
+        verify(valueOperations).set(eq("lottery:auth:session:" + createdSession.token()), valueCaptor.capture(), any(Duration.class));
+        when(valueOperations.get("lottery:auth:session:" + createdSession.token())).thenReturn(valueCaptor.getValue());
+
+        Optional<AuthSession> updatedSession = service.updateSessionProfile(
+                createdSession.token(),
+                "新昵称",
+                "/avatars/avatar-02.svg");
+
+        assertThat(updatedSession).isPresent();
+        assertThat(updatedSession.get().nickname()).isEqualTo("新昵称");
+        assertThat(updatedSession.get().avatarUrl()).isEqualTo("/avatars/avatar-02.svg");
+        ArgumentCaptor<String> updatedValueCaptor = ArgumentCaptor.forClass(String.class);
+        verify(valueOperations, org.mockito.Mockito.times(2)).set(
+                eq("lottery:auth:session:" + createdSession.token()),
+                updatedValueCaptor.capture(),
+                any(Duration.class));
+        when(valueOperations.get("lottery:auth:session:" + createdSession.token()))
+                .thenReturn(updatedValueCaptor.getAllValues().get(1));
+
+        assertThat(service.findSession(createdSession.token())).contains(updatedSession.get());
+    }
+
+    @Test
     void findSessionReturnsEmptyWhenTokenMissingOrBlank() {
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get("lottery:auth:session:missing")).thenReturn(null);
