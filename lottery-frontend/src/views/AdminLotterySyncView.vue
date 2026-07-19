@@ -1,17 +1,22 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 
-import '@/assets/adminLotterySync.css'
+import '@/styles/adminLotterySync.css'
+import { logout } from '@/api/auth'
 import AdminActiveTaskBand from '@/components/admin/AdminActiveTaskBand.vue'
 import AdminPermissionState from '@/components/admin/AdminPermissionState.vue'
 import AdminSyncOperationPanel from '@/components/admin/AdminSyncOperationPanel.vue'
 import AdminSyncStatsGrid from '@/components/admin/AdminSyncStatsGrid.vue'
 import AdminSyncTaskDrawer from '@/components/admin/AdminSyncTaskDrawer.vue'
 import AdminSyncTaskTable from '@/components/admin/AdminSyncTaskTable.vue'
+import UserAccountMenu from '@/components/UserAccountMenu.vue'
 import { useAdminSyncActions } from '@/composables/useAdminSyncActions'
 import { useAdminSyncAuth } from '@/composables/useAdminSyncAuth'
 import { useAdminSyncDashboard } from '@/composables/useAdminSyncDashboard'
 import { useAdminSyncTaskDetail } from '@/composables/useAdminSyncTaskDetail'
+
+const router = useRouter()
 
 const {
   statistics,
@@ -64,7 +69,16 @@ const {
   closeTaskDetail,
 } = useAdminSyncTaskDetail()
 
-const { authChecking, permissionDenied, initializeAdminPage } = useAdminSyncAuth(loadDashboard)
+const { authChecking, permissionDenied, currentUser, initializeAdminPage } = useAdminSyncAuth(loadDashboard)
+
+async function handleLogout() {
+  try {
+    await logout()
+  } finally {
+    currentUser.value = null
+    await router.push('/login')
+  }
+}
 
 onMounted(initializeAdminPage)
 onBeforeUnmount(cleanupNoticeTimer)
@@ -77,7 +91,10 @@ onBeforeUnmount(cleanupNoticeTimer)
         <span class="brand-mark">≋</span>
         <span>彩票助手</span>
       </RouterLink>
-      <div class="admin-badge">同步管理</div>
+      <div class="admin-topbar__right">
+        <div class="admin-badge">同步管理</div>
+        <UserAccountMenu :user="currentUser" :loading="authChecking" @logout="handleLogout" />
+      </div>
     </header>
 
     <main class="admin-main">

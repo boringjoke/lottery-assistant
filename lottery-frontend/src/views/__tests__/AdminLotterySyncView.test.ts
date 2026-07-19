@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchCurrentUser } from '@/api/auth'
+import { fetchCurrentUser, logout } from '@/api/auth'
 import {
   fetchSyncTask,
   fetchSyncTasks,
@@ -31,6 +31,7 @@ vi.mock('@/api/lottery', () => ({
 
 vi.mock('@/api/auth', () => ({
   fetchCurrentUser: vi.fn(),
+  logout: vi.fn(),
 }))
 
 vi.mock('vue-router', () => ({
@@ -121,6 +122,7 @@ describe('AdminLotterySyncView', () => {
   beforeEach(() => {
     routerMocks.push.mockReset()
     vi.mocked(fetchCurrentUser).mockReset()
+    vi.mocked(logout).mockReset()
     vi.mocked(fetchSyncTask).mockReset()
     vi.mocked(fetchSyncTaskStatistics).mockReset()
     vi.mocked(fetchSyncTasks).mockReset()
@@ -135,6 +137,7 @@ describe('AdminLotterySyncView', () => {
       avatarUrl: null,
       roles: ['USER', 'ADMIN'],
     })
+    vi.mocked(logout).mockResolvedValue(undefined)
   })
 
   it('redirects anonymous visitor to login page before loading admin data', async () => {
@@ -172,8 +175,26 @@ describe('AdminLotterySyncView', () => {
 
     expect(fetchSyncTaskStatistics).toHaveBeenCalledOnce()
     expect(fetchSyncTasks).toHaveBeenCalledWith({ pageNo: 1, pageSize: 10, status: undefined })
+    expect(wrapper.find('.account-trigger').text()).toContain('管理员')
     expect(wrapper.text()).toContain('运行中')
     expect(wrapper.text()).toContain('DLT-HISTORY-RUNNING-001')
+  })
+
+  it('shows admin account dropdown and supports logout', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('.account-trigger').trigger('click')
+
+    expect(wrapper.text()).toContain('个人中心')
+    expect(wrapper.text()).toContain('数据同步管理')
+    expect(wrapper.text()).toContain('退出登录')
+
+    await wrapper.findAll('.account-menu button')[2].trigger('click')
+    await flushPromises()
+
+    expect(logout).toHaveBeenCalledOnce()
+    expect(routerMocks.push).toHaveBeenCalledWith('/login')
   })
 
   it('keeps task list columns compact for scanning', async () => {

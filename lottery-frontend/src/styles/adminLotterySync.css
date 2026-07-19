@@ -45,6 +45,12 @@
   font-weight: 800;
 }
 
+.admin-topbar__right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
 .permission-state {
   display: flex;
   min-height: calc(100vh - 160px);
@@ -1039,6 +1045,7 @@ tbody tr:hover {
 
 @media (max-width: 720px) {
   .admin-topbar,
+  .admin-topbar__right,
   .page-title-row,
   .active-task-band,
   .operation-panel__header,
