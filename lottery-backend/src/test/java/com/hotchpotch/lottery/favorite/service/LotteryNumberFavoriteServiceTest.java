@@ -220,6 +220,37 @@ class LotteryNumberFavoriteServiceTest {
         verify(favoriteRepository).updateById(favorite);
     }
 
+    /**
+     * 验证已取消收藏可以被当前用户物理删除。
+     */
+    @Test
+    void deleteFavoriteRemovesCancelledFavorite() {
+        LotteryNumberFavorite favorite = favorite(20L, 10L, "CANCELLED", "01,05,12,23,35", "03,11");
+        when(favoriteRepository.findById(20L)).thenReturn(Optional.of(favorite));
+        LotteryNumberFavoriteService service = service(100);
+
+        service.deleteFavorite(10L, 20L);
+
+        verify(favoriteRepository).deleteByUserIdAndId(10L, 20L);
+    }
+
+    /**
+     * 验证有效收藏必须先取消，不能直接删除。
+     */
+    @Test
+    void deleteFavoriteRejectsActiveFavorite() {
+        LotteryNumberFavorite favorite = favorite(20L, 10L, "ACTIVE", "01,05,12,23,35", "03,11");
+        when(favoriteRepository.findById(20L)).thenReturn(Optional.of(favorite));
+        LotteryNumberFavoriteService service = service(100);
+
+        assertThatThrownBy(() -> service.deleteFavorite(10L, 20L))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+
+        verify(favoriteRepository, never()).deleteByUserIdAndId(10L, 20L);
+    }
+
     private LotteryNumberFavoriteService service(int maxActiveCount) {
         FavoriteProperties favoriteProperties = new FavoriteProperties();
         favoriteProperties.setMaxActiveCount(maxActiveCount);

@@ -1,6 +1,7 @@
 package com.hotchpotch.lottery.favorite.controller;
 
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -171,6 +172,25 @@ class LotteryNumberFavoriteControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+    }
+
+    /**
+     * 验证删除收藏接口使用请求体中的收藏 ID 和当前登录用户 ID。
+     */
+    @Test
+    void deleteFavoriteUsesCurrentUserIdAndRequestBody() throws Exception {
+        mockMvc.perform(post("/api/lottery/favorites/delete")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                    "favoriteId": 20
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(favoriteService).deleteFavorite(10L, 20L);
     }
 
     private LotteryNumberFavoriteResponse response(String status) {

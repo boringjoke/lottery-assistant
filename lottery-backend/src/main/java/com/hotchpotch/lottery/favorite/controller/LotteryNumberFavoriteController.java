@@ -100,4 +100,17 @@ public class LotteryNumberFavoriteController {
 
         return ApiResponse.success(favoriteService.activateFavorite(currentUserContext.requireUserId(), favoriteId));
     }
+
+    /**
+     * 删除当前用户已取消收藏号码。
+     */
+    @PostMapping("/delete")
+    public ApiResponse<Void> deleteFavorite(
+            @RequestBody(required = false) LotteryNumberFavoriteUpdateRequest request) {
+        Long favoriteId = request == null ? null : request.favoriteId();
+
+        favoriteService.deleteFavorite(currentUserContext.requireUserId(), favoriteId);
+
+        return ApiResponse.success(null);
+    }
 }

@@ -166,6 +166,19 @@ public class LotteryNumberFavoriteService {
     }
 
     /**
+     * 删除当前用户已取消收藏；有效收藏必须先取消再删除。
+     */
+    @Transactional
+    public void deleteFavorite(Long userId, Long favoriteId) {
+        LotteryNumberFavorite favorite = findOwnedFavorite(userId, favoriteId);
+        if (!LotteryNumberFavoriteStatus.CANCELLED.code().equals(favorite.getStatus())) {
+            throw new BusinessException(ErrorCode.INVALID_REQUEST, "请先取消收藏后再删除");
+        }
+
+        favoriteRepository.deleteByUserIdAndId(userId, favoriteId);
+    }
+
+    /**
      * 复用已存在收藏；已取消记录会被重新启用。
      */
     private LotteryNumberFavoriteResponse activateExistingFavorite(

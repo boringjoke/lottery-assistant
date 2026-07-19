@@ -89,6 +89,17 @@ class LotteryNumberFavoriteRepositoryTest {
         verify(mapper).updateById(favorite);
     }
 
+    @Test
+    void repositoryDeletesFavoriteByUserIdAndId() {
+        LotteryNumberFavoriteMapper mapper = mock(LotteryNumberFavoriteMapper.class);
+        when(mapper.delete(anyFavoriteWrapper())).thenReturn(1);
+
+        LotteryNumberFavoriteRepository repository = new LotteryNumberFavoriteRepository(mapper);
+
+        assertThat(repository.deleteByUserIdAndId(10L, 20L)).isEqualTo(1);
+        verify(mapper).delete(anyFavoriteWrapper());
+    }
+
     private Wrapper<LotteryNumberFavorite> anyFavoriteWrapper() {
         return any();
     }

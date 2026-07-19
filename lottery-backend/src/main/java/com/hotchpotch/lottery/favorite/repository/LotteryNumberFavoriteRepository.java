@@ -94,6 +94,15 @@ public class LotteryNumberFavoriteRepository {
     }
 
     /**
+     * 按用户和主键物理删除收藏号码。
+     */
+    public int deleteByUserIdAndId(Long userId, Long id) {
+        return lotteryNumberFavoriteMapper.delete(Wrappers.<LotteryNumberFavorite>lambdaQuery()
+                .eq(LotteryNumberFavorite::getUserId, userId)
+                .eq(LotteryNumberFavorite::getId, id));
+    }
+
+    /**
      * 构建用户收藏分页和统计共用查询条件。
      */
     private LambdaQueryWrapper<LotteryNumberFavorite> baseUserQuery(Long userId, String status, String keyword) {
