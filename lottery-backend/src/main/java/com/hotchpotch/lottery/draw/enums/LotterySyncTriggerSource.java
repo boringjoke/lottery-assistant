@@ -8,6 +8,9 @@ public enum LotterySyncTriggerSource {
     /** 管理端手动触发。 */
     ADMIN,
 
+    /** 定时任务触发。 */
+    SCHEDULED,
+
     /** 系统自动触发。 */
     SYSTEM;
 

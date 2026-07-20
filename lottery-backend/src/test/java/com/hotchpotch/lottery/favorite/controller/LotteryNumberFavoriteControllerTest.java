@@ -9,10 +9,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoriteCreateRequest;
+import com.hotchpotch.lottery.favorite.record.LotteryFavoriteDrawHistoryItemResponse;
+import com.hotchpotch.lottery.favorite.record.LotteryFavoriteDrawHistoryPageResponse;
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoritePageResponse;
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoriteResponse;
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoriteUpdateRequest;
+import com.hotchpotch.lottery.favorite.service.LotteryFavoriteAnalyzeService;
 import com.hotchpotch.lottery.favorite.service.LotteryNumberFavoriteService;
+import java.time.LocalDate;
 import com.hotchpotch.lottery.user.security.CurrentUserContext;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -34,6 +38,9 @@ class LotteryNumberFavoriteControllerTest {
 
     @MockitoBean
     private LotteryNumberFavoriteService favoriteService;
+
+    @MockitoBean
+    private LotteryFavoriteAnalyzeService favoriteAnalyzeService;
 
     @MockitoBean
     private CurrentUserContext currentUserContext;
@@ -112,6 +119,35 @@ class LotteryNumberFavoriteControllerTest {
         mockMvc.perform(get("/api/lottery/favorites/20"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.id").value(20));
+    }
+
+    /**
+     * 验证收藏中奖历史接口会透传当前用户、收藏 ID 和分页参数。
+     */
+    @Test
+    void listFavoriteWinningResultsPassesFavoriteAndPageParameters() throws Exception {
+        when(favoriteAnalyzeService.analyzeFavoriteHistory(10L, 20L, 2, 5))
+                .thenReturn(new LotteryFavoriteDrawHistoryPageResponse(
+                        2,
+                        5,
+                        16L,
+                        4,
+                        20L,
+                        "DLT",
+                        "01,05,12,23,35",
+                        "03,11",
+                        "01 05 12 23 35 + 03 11",
+                        drawResult(),
+                        List.of(drawResult())));
+
+        mockMvc.perform(get("/api/lottery/favorites/20/winning-results")
+                        .param("pageNo", "2")
+                        .param("pageSize", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.favoriteId").value(20))
+                .andExpect(jsonPath("$.data.results[0].issueNo").value("26076"))
+                .andExpect(jsonPath("$.data.results[0].prizeName").value("一等奖"));
     }
 
     /**
@@ -205,6 +241,21 @@ class LotteryNumberFavoriteControllerTest {
                 status,
                 LocalDateTime.of(2026, 7, 18, 10, 0),
                 LocalDateTime.of(2026, 7, 18, 10, 0),
+                null,
                 null);
+    }
+
+    private LotteryFavoriteDrawHistoryItemResponse drawResult() {
+        return new LotteryFavoriteDrawHistoryItemResponse(
+                "26076",
+                LocalDate.of(2026, 7, 18),
+                "01,05,12,23,35",
+                "03,11",
+                5,
+                2,
+                true,
+                1,
+                "一等奖",
+                "DLT_2019");
     }
 }

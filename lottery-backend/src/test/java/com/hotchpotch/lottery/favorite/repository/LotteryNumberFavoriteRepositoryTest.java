@@ -10,6 +10,7 @@ import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.hotchpotch.lottery.favorite.entity.LotteryNumberFavorite;
 import com.hotchpotch.lottery.favorite.mapper.LotteryNumberFavoriteMapper;
+import java.time.LocalDateTime;
 import org.junit.jupiter.api.Test;
 
 class LotteryNumberFavoriteRepositoryTest {
@@ -72,6 +73,19 @@ class LotteryNumberFavoriteRepositoryTest {
         assertThat(repository.countByUserIdAndStatusAndKeyword(10L, "ACTIVE", "蓝号")).isEqualTo(1L);
         verify(mapper).selectList(anyFavoriteWrapper());
         verify(mapper).selectCount(anyFavoriteWrapper());
+    }
+
+    @Test
+    void repositoryFindsFavoritesActiveAtDrawTime() {
+        LotteryNumberFavoriteMapper mapper = mock(LotteryNumberFavoriteMapper.class);
+        LotteryNumberFavorite favorite = new LotteryNumberFavorite();
+        when(mapper.selectList(anyFavoriteWrapper())).thenReturn(java.util.List.of(favorite));
+
+        LotteryNumberFavoriteRepository repository = new LotteryNumberFavoriteRepository(mapper);
+
+        assertThat(repository.findActiveAtDrawTime("DLT", LocalDateTime.of(2026, 7, 20, 20, 30)))
+                .containsExactly(favorite);
+        verify(mapper).selectList(anyFavoriteWrapper());
     }
 
     @Test

@@ -27,6 +27,16 @@ class ApplicationYamlTest {
         assertThat(yaml).contains("max-active-count: ${LOTTERY_FAVORITE_MAX_ACTIVE_COUNT:100}");
     }
 
+    @Test
+    void autoLatestSyncDefaultsToDisabledCronSchedule() {
+        String yaml = readResource("application.yaml");
+
+        assertThat(yaml).contains("auto-latest:");
+        assertThat(yaml).contains("enabled: ${LOTTERY_SYNC_AUTO_LATEST_ENABLED:false}");
+        assertThat(yaml).contains("cron: ${LOTTERY_SYNC_AUTO_LATEST_CRON:0 45 21 ? * MON,WED,SAT}");
+        assertThat(yaml).contains("zone: ${LOTTERY_SYNC_AUTO_LATEST_ZONE:Asia/Shanghai}");
+    }
+
     private String readResource(String resourcePath) {
         URL resource = getClass().getClassLoader().getResource(resourcePath);
 

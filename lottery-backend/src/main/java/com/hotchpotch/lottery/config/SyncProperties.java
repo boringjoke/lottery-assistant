@@ -38,6 +38,11 @@ public class SyncProperties {
      */
     private int maxPagesPerTask = 20;
 
+    /**
+     * 自动同步最新开奖配置。
+     */
+    private AutoLatest autoLatest = new AutoLatest();
+
     public int corePoolSize() {
         return corePoolSize;
     }
@@ -84,5 +89,58 @@ public class SyncProperties {
 
     public void setMaxPagesPerTask(int maxPagesPerTask) {
         this.maxPagesPerTask = maxPagesPerTask;
+    }
+
+    public AutoLatest autoLatest() {
+        return autoLatest;
+    }
+
+    public void setAutoLatest(AutoLatest autoLatest) {
+        this.autoLatest = autoLatest;
+    }
+
+    /**
+     * 最新开奖自动同步配置，默认关闭，避免本地启动后自动请求 crawler。
+     */
+    public static class AutoLatest {
+
+        /**
+         * 是否启用最新开奖自动同步。
+         */
+        private boolean enabled = false;
+
+        /**
+         * 最新开奖自动同步 cron 表达式，默认在大乐透开奖日稍晚触发。
+         */
+        private String cron = "0 45 21 ? * MON,WED,SAT";
+
+        /**
+         * cron 表达式使用的时区。
+         */
+        private String zone = "Asia/Shanghai";
+
+        public boolean enabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String cron() {
+            return cron;
+        }
+
+        public void setCron(String cron) {
+            this.cron = cron;
+        }
+
+        public String zone() {
+            return zone;
+        }
+
+        public void setZone(String zone) {
+            this.zone = zone;
+        }
     }
 }

@@ -21,6 +21,7 @@ import com.hotchpotch.lottery.draw.record.LotterySyncTaskStatisticsResponse;
 import com.hotchpotch.lottery.draw.repository.LotteryDrawRepository;
 import com.hotchpotch.lottery.draw.repository.LotteryPrizeTierRepository;
 import com.hotchpotch.lottery.draw.repository.LotterySyncTaskRepository;
+import com.hotchpotch.lottery.favorite.service.LotteryFavoriteDrawResultGenerateService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -35,6 +36,9 @@ import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -44,6 +48,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class LotteryDrawSyncService {
 
+    private static final Logger log = LoggerFactory.getLogger(LotteryDrawSyncService.class);
     private static final String LATEST_REQUEST_PARAMS = "{\"source\":\"crawler.latest\"}";
     private static final int FAILURE_REASON_MAX_LENGTH = 1000;
 
@@ -51,6 +56,7 @@ public class LotteryDrawSyncService {
     private final LotteryDrawRepository drawRepository;
     private final LotteryPrizeTierRepository prizeTierRepository;
     private final LotterySyncTaskRepository syncTaskRepository;
+    private final LotteryFavoriteDrawResultGenerateService favoriteDrawResultGenerateService;
     private final Object syncTaskCreationMonitor = new Object();
 
     /**
@@ -61,10 +67,24 @@ public class LotteryDrawSyncService {
             LotteryDrawRepository drawRepository,
             LotteryPrizeTierRepository prizeTierRepository,
             LotterySyncTaskRepository syncTaskRepository) {
+        this(crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository, null);
+    }
+
+    /**
+     * 初始化同步服务依赖的 crawler 客户端、数据仓储和收藏开奖结果生成服务。
+     */
+    @Autowired
+    public LotteryDrawSyncService(
+            SportteryCrawlerClient crawlerClient,
+            LotteryDrawRepository drawRepository,
+            LotteryPrizeTierRepository prizeTierRepository,
+            LotterySyncTaskRepository syncTaskRepository,
+            LotteryFavoriteDrawResultGenerateService favoriteDrawResultGenerateService) {
         this.crawlerClient = crawlerClient;
         this.drawRepository = drawRepository;
         this.prizeTierRepository = prizeTierRepository;
         this.syncTaskRepository = syncTaskRepository;
+        this.favoriteDrawResultGenerateService = favoriteDrawResultGenerateService;
     }
 
     /**
@@ -962,17 +982,45 @@ public class LotteryDrawSyncService {
                     fillMissingPrizeTiers(draw, existingDraw.getId());
                     return false;
                 })
-                .orElseGet(() -> insertNewDraw(draw));
+                .orElseGet(() -> insertNewDrawAndGenerateFavoriteResults(draw));
+    }
+
+    /**
+     * 插入一条新的开奖数据，并尝试生成收藏开奖结果。
+     */
+    private boolean insertNewDrawAndGenerateFavoriteResults(CrawlerDraw draw) {
+        LotteryDraw savedDraw = insertNewDraw(draw);
+        generateFavoriteDrawResults(savedDraw);
+        return true;
     }
 
     /**
      * 插入一条新的开奖主表和对应奖级明细。
      */
-    private boolean insertNewDraw(CrawlerDraw draw) {
+    private LotteryDraw insertNewDraw(CrawlerDraw draw) {
         LotteryDraw savedDraw = toDrawEntity(draw);
         drawRepository.insert(savedDraw);
         prizeTierRepository.insertBatch(toPrizeTierEntities(draw, savedDraw.getId()));
-        return true;
+        return savedDraw;
+    }
+
+    /**
+     * 开奖入库后生成收藏开奖结果；失败不影响开奖同步主链路。
+     */
+    private void generateFavoriteDrawResults(LotteryDraw savedDraw) {
+        if (favoriteDrawResultGenerateService == null) {
+            return;
+        }
+
+        try {
+            favoriteDrawResultGenerateService.generateForDraw(savedDraw);
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "收藏开奖结果生成失败: lotteryType={}, issueNo={}",
+                    savedDraw.getLotteryType(),
+                    savedDraw.getIssueNo(),
+                    ex);
+        }
     }
 
     /**

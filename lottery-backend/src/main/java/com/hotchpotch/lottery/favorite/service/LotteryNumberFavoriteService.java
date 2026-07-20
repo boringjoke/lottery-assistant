@@ -9,6 +9,7 @@ import com.hotchpotch.lottery.draw.record.LotteryDltNumber;
 import com.hotchpotch.lottery.draw.service.LotteryDltNumberService;
 import com.hotchpotch.lottery.favorite.entity.LotteryNumberFavorite;
 import com.hotchpotch.lottery.favorite.enums.LotteryNumberFavoriteStatus;
+import com.hotchpotch.lottery.favorite.record.LotteryFavoriteDrawHistoryItemResponse;
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoriteCreateRequest;
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoritePageResponse;
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoriteResponse;
@@ -17,6 +18,7 @@ import com.hotchpotch.lottery.favorite.repository.LotteryNumberFavoriteRepositor
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,14 +34,25 @@ public class LotteryNumberFavoriteService {
     private final LotteryNumberFavoriteRepository favoriteRepository;
     private final LotteryDltNumberService numberService;
     private final FavoriteProperties favoriteProperties;
+    private final LotteryFavoriteAnalyzeService favoriteAnalyzeService;
 
     public LotteryNumberFavoriteService(
             LotteryNumberFavoriteRepository favoriteRepository,
             LotteryDltNumberService numberService,
             FavoriteProperties favoriteProperties) {
+        this(favoriteRepository, numberService, favoriteProperties, null);
+    }
+
+    @Autowired
+    public LotteryNumberFavoriteService(
+            LotteryNumberFavoriteRepository favoriteRepository,
+            LotteryDltNumberService numberService,
+            FavoriteProperties favoriteProperties,
+            LotteryFavoriteAnalyzeService favoriteAnalyzeService) {
         this.favoriteRepository = favoriteRepository;
         this.numberService = numberService;
         this.favoriteProperties = favoriteProperties;
+        this.favoriteAnalyzeService = favoriteAnalyzeService;
     }
 
     /**
@@ -363,7 +376,19 @@ public class LotteryNumberFavoriteService {
                 favorite.getStatus(),
                 favorite.getFavoriteTime(),
                 favorite.getEffectiveTime(),
-                favorite.getCancelTime());
+                favorite.getCancelTime(),
+                latestDrawResult(favorite));
+    }
+
+    /**
+     * 获取最近一期开奖实时分析结果；单元测试可不注入该服务。
+     */
+    private LotteryFavoriteDrawHistoryItemResponse latestDrawResult(LotteryNumberFavorite favorite) {
+        if (favoriteAnalyzeService == null) {
+            return null;
+        }
+
+        return favoriteAnalyzeService.latestDrawResult(favorite);
     }
 
     /**

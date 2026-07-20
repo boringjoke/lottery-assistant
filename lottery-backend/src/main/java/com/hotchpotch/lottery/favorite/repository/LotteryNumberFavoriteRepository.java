@@ -3,7 +3,9 @@ package com.hotchpotch.lottery.favorite.repository;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.hotchpotch.lottery.favorite.entity.LotteryNumberFavorite;
+import com.hotchpotch.lottery.favorite.enums.LotteryNumberFavoriteStatus;
 import com.hotchpotch.lottery.favorite.mapper.LotteryNumberFavoriteMapper;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
@@ -77,6 +79,22 @@ public class LotteryNumberFavoriteRepository {
      */
     public Long countByUserIdAndStatusAndKeyword(Long userId, String status, String keyword) {
         return lotteryNumberFavoriteMapper.selectCount(baseUserQuery(userId, status, keyword));
+    }
+
+    /**
+     * 查询指定开奖时间点仍然有效的收藏号码。
+     */
+    public List<LotteryNumberFavorite> findActiveAtDrawTime(String lotteryType, LocalDateTime drawTime) {
+        return lotteryNumberFavoriteMapper.selectList(Wrappers.<LotteryNumberFavorite>lambdaQuery()
+                .eq(LotteryNumberFavorite::getLotteryType, lotteryType)
+                .le(LotteryNumberFavorite::getEffectiveTime, drawTime)
+                .and(wrapper -> wrapper
+                        .eq(LotteryNumberFavorite::getStatus, LotteryNumberFavoriteStatus.ACTIVE.code())
+                        .isNull(LotteryNumberFavorite::getCancelTime)
+                        .or()
+                        .gt(LotteryNumberFavorite::getCancelTime, drawTime))
+                .orderByAsc(LotteryNumberFavorite::getUserId)
+                .orderByAsc(LotteryNumberFavorite::getId));
     }
 
     /**

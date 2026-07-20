@@ -3,9 +3,11 @@ package com.hotchpotch.lottery.favorite.controller;
 import com.hotchpotch.lottery.common.constant.PageConstants;
 import com.hotchpotch.lottery.common.response.ApiResponse;
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoriteCreateRequest;
+import com.hotchpotch.lottery.favorite.record.LotteryFavoriteDrawHistoryPageResponse;
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoritePageResponse;
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoriteResponse;
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoriteUpdateRequest;
+import com.hotchpotch.lottery.favorite.service.LotteryFavoriteAnalyzeService;
 import com.hotchpotch.lottery.favorite.service.LotteryNumberFavoriteService;
 import com.hotchpotch.lottery.user.security.CurrentUserContext;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,12 +26,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class LotteryNumberFavoriteController {
 
     private final LotteryNumberFavoriteService favoriteService;
+    private final LotteryFavoriteAnalyzeService favoriteAnalyzeService;
     private final CurrentUserContext currentUserContext;
 
     public LotteryNumberFavoriteController(
             LotteryNumberFavoriteService favoriteService,
+            LotteryFavoriteAnalyzeService favoriteAnalyzeService,
             CurrentUserContext currentUserContext) {
         this.favoriteService = favoriteService;
+        this.favoriteAnalyzeService = favoriteAnalyzeService;
         this.currentUserContext = currentUserContext;
     }
 
@@ -66,6 +71,21 @@ public class LotteryNumberFavoriteController {
     public ApiResponse<LotteryNumberFavoriteResponse> getFavorite(
             @PathVariable Long favoriteId) {
         return ApiResponse.success(favoriteService.getFavorite(currentUserContext.requireUserId(), favoriteId));
+    }
+
+    /**
+     * 分页查询当前用户指定收藏号码的中奖历史实时分析结果。
+     */
+    @GetMapping("/{favoriteId}/winning-results")
+    public ApiResponse<LotteryFavoriteDrawHistoryPageResponse> listFavoriteWinningResults(
+            @PathVariable Long favoriteId,
+            @RequestParam(defaultValue = PageConstants.DEFAULT_PAGE_NO_TEXT) int pageNo,
+            @RequestParam(defaultValue = PageConstants.DEFAULT_PAGE_SIZE_TEXT) int pageSize) {
+        return ApiResponse.success(favoriteAnalyzeService.analyzeFavoriteHistory(
+                currentUserContext.requireUserId(),
+                favoriteId,
+                pageNo,
+                pageSize));
     }
 
     /**

@@ -98,6 +98,38 @@ class FlywayMigrationTest {
         assertThat(migration).doesNotContainIgnoringCase("FOREIGN KEY");
     }
 
+    @Test
+    void v6CreatesFavoriteDrawResultTableWithoutDatabaseForeignKeys() {
+        String migration = readMigration("db/migration/V6__create_lottery_favorite_draw_results_table.sql");
+
+        assertThat(migration).contains("CREATE TABLE lottery_favorite_draw_results");
+        assertThat(migration).contains("favorite_id BIGINT NOT NULL");
+        assertThat(migration).contains("user_id BIGINT NOT NULL");
+        assertThat(migration).contains("draw_id BIGINT NOT NULL");
+        assertThat(migration).contains("lottery_type VARCHAR(16) NOT NULL");
+        assertThat(migration).contains("issue_no VARCHAR(32) NOT NULL");
+        assertThat(migration).contains("draw_date DATE NOT NULL");
+        assertThat(migration).contains("favorite_front_numbers VARCHAR(32) NOT NULL");
+        assertThat(migration).contains("favorite_back_numbers VARCHAR(16) NOT NULL");
+        assertThat(migration).contains("draw_front_numbers VARCHAR(32) NOT NULL");
+        assertThat(migration).contains("draw_back_numbers VARCHAR(16) NOT NULL");
+        assertThat(migration).contains("front_hit_count INT NOT NULL DEFAULT 0");
+        assertThat(migration).contains("back_hit_count INT NOT NULL DEFAULT 0");
+        assertThat(migration).contains("winning TINYINT(1) NOT NULL DEFAULT 0");
+        assertThat(migration).contains("prize_level INT NULL");
+        assertThat(migration).contains("prize_name VARCHAR(64) NOT NULL");
+        assertThat(migration).contains("rule_version VARCHAR(32) NOT NULL");
+        assertThat(migration).contains("stake_amount DECIMAL(18,2) NULL");
+        assertThat(migration).contains("calculated_time DATETIME NOT NULL");
+        assertThat(migration).contains("create_time");
+        assertThat(migration).contains("update_time");
+        assertThat(migration).contains("UNIQUE KEY uk_favorite_draw (favorite_id, draw_id)");
+        assertThat(migration).contains("KEY idx_user_draw_date (user_id, draw_date, issue_no)");
+        assertThat(migration).contains("KEY idx_user_favorite (user_id, favorite_id)");
+        assertThat(migration).contains("KEY idx_lottery_issue (lottery_type, issue_no)");
+        assertThat(migration).doesNotContainIgnoringCase("FOREIGN KEY");
+    }
+
     private String readMigration(String resourcePath) {
         URL resource = getClass().getClassLoader().getResource(resourcePath);
 

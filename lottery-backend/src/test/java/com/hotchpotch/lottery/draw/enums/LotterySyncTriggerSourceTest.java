@@ -12,6 +12,7 @@ class LotterySyncTriggerSourceTest {
     @Test
     void triggerSourceCodeMatchesPublicContract() {
         assertThat(LotterySyncTriggerSource.ADMIN.code()).isEqualTo("ADMIN");
+        assertThat(LotterySyncTriggerSource.SCHEDULED.code()).isEqualTo("SCHEDULED");
         assertThat(LotterySyncTriggerSource.SYSTEM.code()).isEqualTo("SYSTEM");
     }
 }

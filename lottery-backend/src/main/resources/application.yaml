@@ -38,6 +38,10 @@ lottery:
     default-page-delay-millis: ${LOTTERY_SYNC_DEFAULT_PAGE_DELAY_MILLIS:2000}
     task-delay-millis: ${LOTTERY_SYNC_TASK_DELAY_MILLIS:10000}
     max-pages-per-task: ${LOTTERY_SYNC_MAX_PAGES_PER_TASK:20}
+    auto-latest:
+      enabled: ${LOTTERY_SYNC_AUTO_LATEST_ENABLED:true}
+      cron: ${LOTTERY_SYNC_AUTO_LATEST_CRON:36 29 11 * * *}
+      zone: ${LOTTERY_SYNC_AUTO_LATEST_ZONE:Asia/Shanghai}
   auth:
     session-ttl-seconds: ${LOTTERY_AUTH_SESSION_TTL_SECONDS:604800}
   favorite:

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.hotchpotch.lottery.favorite.mapper.LotteryFavoriteDrawResultMapper">
+
+    <resultMap id="BaseResultMap" type="com.hotchpotch.lottery.favorite.entity.LotteryFavoriteDrawResult">
+        <id column="id" property="id"/>
+        <result column="favorite_id" property="favoriteId"/>
+        <result column="user_id" property="userId"/>
+        <result column="draw_id" property="drawId"/>
+        <result column="lottery_type" property="lotteryType"/>
+        <result column="issue_no" property="issueNo"/>
+        <result column="draw_date" property="drawDate"/>
+        <result column="favorite_front_numbers" property="favoriteFrontNumbers"/>
+        <result column="favorite_back_numbers" property="favoriteBackNumbers"/>
+        <result column="draw_front_numbers" property="drawFrontNumbers"/>
+        <result column="draw_back_numbers" property="drawBackNumbers"/>
+        <result column="front_hit_count" property="frontHitCount"/>
+        <result column="back_hit_count" property="backHitCount"/>
+        <result column="winning" property="winning"/>
+        <result column="prize_level" property="prizeLevel"/>
+        <result column="prize_name" property="prizeName"/>
+        <result column="rule_version" property="ruleVersion"/>
+        <result column="stake_amount" property="stakeAmount"/>
+        <result column="calculated_time" property="calculatedTime"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+</mapper>

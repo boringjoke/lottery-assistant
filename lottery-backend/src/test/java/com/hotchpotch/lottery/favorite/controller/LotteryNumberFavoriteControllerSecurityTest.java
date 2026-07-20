@@ -9,6 +9,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.hotchpotch.lottery.config.SecurityConfig;
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoritePageResponse;
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoriteResponse;
+import com.hotchpotch.lottery.favorite.service.LotteryFavoriteAnalyzeService;
 import com.hotchpotch.lottery.favorite.service.LotteryNumberFavoriteService;
 import com.hotchpotch.lottery.user.record.AuthSession;
 import com.hotchpotch.lottery.user.security.CurrentUserContext;
@@ -37,6 +38,9 @@ class LotteryNumberFavoriteControllerSecurityTest {
 
     @MockitoBean
     private LotteryNumberFavoriteService favoriteService;
+
+    @MockitoBean
+    private LotteryFavoriteAnalyzeService favoriteAnalyzeService;
 
     @MockitoBean
     private AuthSessionService authSessionService;
@@ -134,6 +138,7 @@ class LotteryNumberFavoriteControllerSecurityTest {
                 "ACTIVE",
                 LocalDateTime.of(2026, 7, 18, 10, 0),
                 LocalDateTime.of(2026, 7, 18, 10, 0),
+                null,
                 null);
     }
 }
