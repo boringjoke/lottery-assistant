@@ -12,7 +12,7 @@ import {
 } from '@/api/favorites'
 import { fetchUserProfile } from '@/api/user'
 import AppToast from '@/components/AppToast.vue'
-import UserAccountMenu from '@/components/UserAccountMenu.vue'
+import ProfileShell from '@/components/profile/ProfileShell.vue'
 import type { CurrentUser } from '@/types/auth'
 import type { FavoriteStatus, LotteryNumberFavorite, LotteryNumberFavoritePage } from '@/types/favorite'
 import type { UserProfile } from '@/types/user'
@@ -293,34 +293,14 @@ onMounted(initializePage)
 </script>
 
 <template>
-  <div class="favorites-page">
+  <ProfileShell
+    :current-user="currentUser"
+    :loading="authLoading || loadingProfile"
+    active-nav="favorites"
+    @logout="handleLogout"
+  >
     <AppToast :message="toastMessage" :type="toastType" @close="closeToast" />
-
-    <header class="favorites-topbar">
-      <RouterLink class="favorites-brand" to="/lottery-assistant?tab=overview">
-        <span class="favorites-brand__mark">≋</span>
-        <span>彩票助手</span>
-      </RouterLink>
-      <UserAccountMenu :user="currentUser" :loading="authLoading || loadingProfile" @logout="handleLogout" />
-    </header>
-
-    <div class="favorites-layout">
-      <aside class="favorites-sidebar">
-        <div class="favorites-sidebar__title">个人中心</div>
-        <nav class="favorites-nav" aria-label="个人中心导航">
-          <RouterLink class="favorites-nav__item" to="/profile">
-            <span class="favorites-nav__dot" aria-hidden="true"></span>
-            <span>个人资料</span>
-          </RouterLink>
-          <RouterLink class="favorites-nav__item active" to="/profile/favorites">
-            <span class="favorites-nav__dot" aria-hidden="true"></span>
-            <span>我的收藏</span>
-          </RouterLink>
-        </nav>
-      </aside>
-
-      <main class="favorites-main">
-        <section class="favorites-panel">
+    <section class="favorites-panel">
           <div class="favorites-panel__header">
             <div>
               <h1>我的收藏号码</h1>
@@ -499,106 +479,10 @@ onMounted(initializePage)
             </div>
           </div>
         </section>
-      </main>
-    </div>
-  </div>
+  </ProfileShell>
 </template>
 
 <style scoped>
-.favorites-page {
-  min-height: 100vh;
-  background: #f8fafc;
-  color: #0f172a;
-}
-
-.favorites-topbar {
-  display: flex;
-  height: 64px;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid #e2e8f0;
-  background: #ffffff;
-  padding: 0 24px;
-}
-
-.favorites-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: #1e3a8a;
-  font-size: 20px;
-  font-weight: 900;
-  text-decoration: none;
-}
-
-.favorites-brand__mark {
-  display: inline-flex;
-  width: 32px;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-  color: #ffffff;
-}
-
-.favorites-layout {
-  display: flex;
-  min-height: calc(100vh - 64px);
-}
-
-.favorites-sidebar {
-  width: 220px;
-  flex: 0 0 220px;
-  border-right: 1px solid #e2e8f0;
-  background: #ffffff;
-  padding: 24px 12px;
-}
-
-.favorites-sidebar__title {
-  margin: 0 12px 16px;
-  color: #94a3b8;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.favorites-nav {
-  display: grid;
-  gap: 6px;
-}
-
-.favorites-nav__item {
-  display: flex;
-  height: 42px;
-  align-items: center;
-  gap: 10px;
-  border-radius: 12px;
-  color: #64748b;
-  padding: 0 12px;
-  font-size: 14px;
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.favorites-nav__item.active {
-  background: #eff6ff;
-  color: #2563eb;
-}
-
-.favorites-nav__dot {
-  width: 8px;
-  height: 8px;
-  flex: 0 0 8px;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.favorites-main {
-  flex: 1;
-  min-width: 0;
-  padding: 28px;
-}
-
 .favorites-panel {
   border: 1px solid #e2e8f0;
   border-radius: 16px;
@@ -995,28 +879,6 @@ onMounted(initializePage)
 }
 
 @media (max-width: 860px) {
-  .favorites-topbar {
-    height: auto;
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 14px;
-    padding: 16px;
-  }
-
-  .favorites-layout {
-    display: block;
-  }
-
-  .favorites-sidebar {
-    width: auto;
-    border-right: 0;
-    border-bottom: 1px solid #e2e8f0;
-  }
-
-  .favorites-main {
-    padding: 16px;
-  }
-
   .favorites-panel {
     padding: 20px;
   }

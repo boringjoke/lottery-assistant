@@ -93,7 +93,7 @@ describe('ProfileView', () => {
     await flushPromises()
 
     await wrapper.find('.account-trigger').trigger('click')
-    await wrapper.findAll('.account-menu button')[1].trigger('click')
+    await wrapper.findAll('.account-menu button')[2].trigger('click')
     await flushPromises()
 
     expect(logout).toHaveBeenCalledOnce()

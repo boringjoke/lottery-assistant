@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 
 import { logout } from '@/api/auth'
 import { fetchUserProfile, updateUserProfile } from '@/api/user'
-import UserAccountMenu from '@/components/UserAccountMenu.vue'
+import ProfileShell from '@/components/profile/ProfileShell.vue'
 import type { CurrentUser } from '@/types/auth'
 import type { UserProfile } from '@/types/user'
 import { getErrorMessage } from '@/utils/lotteryFormat'
@@ -134,32 +134,13 @@ onMounted(loadProfile)
 </script>
 
 <template>
-  <div class="profile-page">
-    <header class="profile-topbar">
-      <RouterLink class="profile-brand" to="/lottery-assistant?tab=overview">
-        <span class="profile-brand__mark">≋</span>
-        <span>彩票助手</span>
-      </RouterLink>
-      <UserAccountMenu :user="currentUser" :loading="authLoading || loading" @logout="handleLogout" />
-    </header>
-
-    <div class="profile-layout">
-      <aside class="profile-sidebar">
-        <div class="profile-sidebar__title">个人中心</div>
-        <nav class="profile-nav" aria-label="个人中心导航">
-          <RouterLink class="profile-nav__item active" to="/profile">
-            <span class="profile-nav__dot" aria-hidden="true"></span>
-            <span>个人资料</span>
-          </RouterLink>
-          <RouterLink class="profile-nav__item" to="/profile/favorites">
-            <span class="profile-nav__dot" aria-hidden="true"></span>
-            <span>我的收藏</span>
-          </RouterLink>
-        </nav>
-      </aside>
-
-      <main class="profile-main">
-        <section class="profile-card">
+  <ProfileShell
+    :current-user="currentUser"
+    :loading="authLoading || loading"
+    active-nav="profile"
+    @logout="handleLogout"
+  >
+    <section class="profile-card">
           <div class="profile-card__header">
             <div>
               <h1>个人资料</h1>
@@ -267,108 +248,10 @@ onMounted(loadProfile)
             </dl>
           </template>
         </section>
-      </main>
-    </div>
-  </div>
+  </ProfileShell>
 </template>
 
 <style scoped>
-.profile-page {
-  min-height: 100vh;
-  background: #f8fafc;
-  color: #0f172a;
-}
-
-.profile-topbar {
-  display: flex;
-  height: 64px;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid #e2e8f0;
-  background: #ffffff;
-  padding: 0 24px;
-}
-
-.profile-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  color: #1e3a8a;
-  font-size: 20px;
-  font-weight: 900;
-  text-decoration: none;
-}
-
-.profile-brand__mark {
-  display: inline-flex;
-  width: 32px;
-  height: 32px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-  color: #ffffff;
-}
-
-.profile-layout {
-  display: flex;
-  min-height: calc(100vh - 64px);
-}
-
-.profile-sidebar {
-  width: 220px;
-  flex: 0 0 220px;
-  border-right: 1px solid #e2e8f0;
-  background: #ffffff;
-  padding: 24px 12px;
-}
-
-.profile-sidebar__title {
-  margin: 0 12px 16px;
-  color: #94a3b8;
-  font-size: 12px;
-  font-weight: 900;
-}
-
-.profile-nav {
-  display: grid;
-  gap: 6px;
-}
-
-.profile-nav__item {
-  display: flex;
-  height: 42px;
-  align-items: center;
-  gap: 10px;
-  border: 0;
-  border-radius: 12px;
-  background: transparent;
-  color: #64748b;
-  padding: 0 12px;
-  font-size: 14px;
-  font-weight: 800;
-  text-align: left;
-  text-decoration: none;
-}
-
-.profile-nav__item.active {
-  background: #eff6ff;
-  color: #2563eb;
-}
-
-.profile-nav__dot {
-  width: 8px;
-  height: 8px;
-  flex: 0 0 8px;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.profile-main {
-  flex: 1;
-  padding: 28px;
-}
-
 .profile-card {
   max-width: 760px;
   border: 1px solid #e2e8f0;
@@ -647,28 +530,6 @@ onMounted(loadProfile)
 }
 
 @media (max-width: 760px) {
-  .profile-topbar {
-    height: auto;
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 14px;
-    padding: 16px;
-  }
-
-  .profile-layout {
-    display: block;
-  }
-
-  .profile-sidebar {
-    width: auto;
-    border-right: 0;
-    border-bottom: 1px solid #e2e8f0;
-  }
-
-  .profile-main {
-    padding: 16px;
-  }
-
   .profile-card {
     padding: 20px;
   }
