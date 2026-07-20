@@ -1,5 +1,18 @@
 export type FavoriteStatus = 'ACTIVE' | 'CANCELLED'
 
+export interface FavoriteDrawHistoryItem {
+  issueNo: string
+  drawDate: string
+  drawFrontNumbers: string
+  drawBackNumbers: string
+  frontHitCount: number
+  backHitCount: number
+  winning: boolean
+  prizeLevel: number | null
+  prizeName: string
+  ruleVersion: string
+}
+
 export interface LotteryNumberFavorite {
   id: number
   lotteryType: string
@@ -12,6 +25,7 @@ export interface LotteryNumberFavorite {
   favoriteTime: string | null
   effectiveTime: string | null
   cancelTime: string | null
+  latestDrawResult: FavoriteDrawHistoryItem | null
 }
 
 export interface FavoritePageQuery {
@@ -29,6 +43,20 @@ export interface LotteryNumberFavoritePage {
   status: FavoriteStatus | null
   keyword: string | null
   favorites: LotteryNumberFavorite[]
+}
+
+export interface FavoriteDrawHistoryPage {
+  pageNo: number
+  pageSize: number
+  total: number
+  pages: number
+  favoriteId: number
+  lotteryType: string
+  frontNumbers: string
+  backNumbers: string
+  displayText: string
+  latestDrawResult: FavoriteDrawHistoryItem | null
+  results: FavoriteDrawHistoryItem[]
 }
 
 export interface LotteryNumberFavoriteUpdateRequest {

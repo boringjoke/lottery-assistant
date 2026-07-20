@@ -26,6 +26,16 @@ export function syncTypeLabel(syncType: LotterySyncType | null | undefined): str
   return syncType ? labels[syncType] : '-'
 }
 
+export function triggerSourceLabel(triggerSource: string | null | undefined): string {
+  const labels: Record<string, string> = {
+    ADMIN: '管理员',
+    SCHEDULED: '定时任务',
+    SYSTEM: '系统',
+  }
+
+  return triggerSource ? labels[triggerSource] ?? triggerSource : '-'
+}
+
 export function formatLotteryType(lotteryType: string | null | undefined): string {
   return lotteryType === 'DLT' ? '大乐透' : lotteryType || '-'
 }

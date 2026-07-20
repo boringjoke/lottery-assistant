@@ -7,6 +7,7 @@ import {
   activateFavorite,
   deactivateFavorite,
   deleteFavorite,
+  fetchFavoriteDrawHistory,
   fetchFavoritePage,
   updateFavorite,
 } from '@/api/favorites'
@@ -14,7 +15,13 @@ import { fetchUserProfile } from '@/api/user'
 import AppToast from '@/components/AppToast.vue'
 import ProfileShell from '@/components/profile/ProfileShell.vue'
 import type { CurrentUser } from '@/types/auth'
-import type { FavoriteStatus, LotteryNumberFavorite, LotteryNumberFavoritePage } from '@/types/favorite'
+import type {
+  FavoriteDrawHistoryItem,
+  FavoriteDrawHistoryPage,
+  FavoriteStatus,
+  LotteryNumberFavorite,
+  LotteryNumberFavoritePage,
+} from '@/types/favorite'
 import type { UserProfile } from '@/types/user'
 import { getErrorMessage } from '@/utils/lotteryFormat'
 
@@ -35,6 +42,13 @@ const pageSize = 10
 const editingFavoriteId = ref<number | null>(null)
 const editName = ref('')
 const editRemark = ref('')
+const historyDrawerOpen = ref(false)
+const selectedHistoryFavorite = ref<LotteryNumberFavorite | null>(null)
+const historyPage = ref<FavoriteDrawHistoryPage | null>(null)
+const loadingHistory = ref(false)
+const historyError = ref('')
+const historyPageNo = ref(1)
+const historyPageSize = 10
 
 const statusFilters: Array<{ label: string, value: FavoriteStatus }> = [
   { label: '有效收藏', value: 'ACTIVE' },
@@ -58,6 +72,9 @@ const favorites = computed(() => favoritePage.value?.favorites ?? [])
 const totalPages = computed(() => Math.max(favoritePage.value?.pages ?? 0, 1))
 const hasPreviousPage = computed(() => pageNo.value > 1)
 const hasNextPage = computed(() => pageNo.value < totalPages.value)
+const historyTotalPages = computed(() => Math.max(historyPage.value?.pages ?? 0, 1))
+const hasPreviousHistoryPage = computed(() => historyPageNo.value > 1)
+const hasNextHistoryPage = computed(() => historyPageNo.value < historyTotalPages.value)
 
 function parseNumbers(value: string): string[] {
   return value
@@ -76,6 +93,30 @@ function lotteryTypeText(value: string): string {
 
 function statusText(value: FavoriteStatus): string {
   return value === 'ACTIVE' ? '有效' : '已取消'
+}
+
+function drawResultText(result: FavoriteDrawHistoryItem | null | undefined): string {
+  if (!result) {
+    return '暂无开奖'
+  }
+
+  return result.winning ? result.prizeName : '未中奖'
+}
+
+function drawResultClass(result: FavoriteDrawHistoryItem | null | undefined): string {
+  if (!result) {
+    return 'favorite-draw-result--empty'
+  }
+
+  return result.winning ? 'favorite-draw-result--winning' : 'favorite-draw-result--miss'
+}
+
+function hitText(result: FavoriteDrawHistoryItem): string {
+  return `前区 ${result.frontHitCount} / 后区 ${result.backHitCount}`
+}
+
+function formatStoredNumbers(value: string): string {
+  return value.replace(/,/g, ' ')
 }
 
 function formatTime(value: string | null | undefined): string {
@@ -152,6 +193,35 @@ async function loadFavorites() {
   }
 }
 
+async function loadHistory() {
+  if (!selectedHistoryFavorite.value) {
+    return
+  }
+
+  loadingHistory.value = true
+  historyError.value = ''
+
+  try {
+    historyPage.value = await fetchFavoriteDrawHistory(selectedHistoryFavorite.value.id, {
+      pageNo: historyPageNo.value,
+      pageSize: historyPageSize,
+    })
+  } catch (error) {
+    if (isUnauthorized(error)) {
+      await router.push({
+        path: '/login',
+        query: { redirect: '/profile/favorites' },
+      })
+      return
+    }
+
+    historyError.value = getErrorMessage(error)
+    historyPage.value = null
+  } finally {
+    loadingHistory.value = false
+  }
+}
+
 async function initializePage() {
   await loadProfile()
   await loadFavorites()
@@ -194,6 +264,28 @@ function cancelEdit() {
   editingFavoriteId.value = null
   editName.value = ''
   editRemark.value = ''
+}
+
+async function openHistory(favorite: LotteryNumberFavorite) {
+  selectedHistoryFavorite.value = favorite
+  historyDrawerOpen.value = true
+  historyPageNo.value = 1
+  historyPage.value = null
+  historyError.value = ''
+  closeToast()
+  await loadHistory()
+}
+
+function closeHistory() {
+  historyDrawerOpen.value = false
+  selectedHistoryFavorite.value = null
+  historyPage.value = null
+  historyError.value = ''
+}
+
+async function changeHistoryPage(nextPageNo: number) {
+  historyPageNo.value = nextPageNo
+  await loadHistory()
 }
 
 async function saveFavorite() {
@@ -354,6 +446,7 @@ onMounted(initializePage)
                   <th>彩票类型</th>
                   <th>收藏号码</th>
                   <th>备注</th>
+                  <th>最近开奖</th>
                   <th>状态</th>
                   <th>收藏时间</th>
                   <th>操作</th>
@@ -387,6 +480,20 @@ onMounted(initializePage)
                     </td>
                     <td class="favorites-remark">{{ favorite.remark || '-' }}</td>
                     <td>
+                      <button
+                        data-test="open-favorite-history"
+                        class="favorite-draw-result"
+                        :class="drawResultClass(favorite.latestDrawResult)"
+                        type="button"
+                        @click="openHistory(favorite)"
+                      >
+                        <span>{{ drawResultText(favorite.latestDrawResult) }}</span>
+                        <small v-if="favorite.latestDrawResult">
+                          {{ favorite.latestDrawResult.issueNo }} 期
+                        </small>
+                      </button>
+                    </td>
+                    <td>
                       <span class="favorites-status" :class="`favorites-status--${favorite.status.toLowerCase()}`">
                         {{ statusText(favorite.status) }}
                       </span>
@@ -394,6 +501,14 @@ onMounted(initializePage)
                     <td>{{ formatTime(favorite.favoriteTime) }}</td>
                     <td>
                       <div class="favorites-actions">
+                        <button
+                          data-test="history-favorite"
+                          type="button"
+                          :disabled="operatingFavoriteId === favorite.id"
+                          @click="openHistory(favorite)"
+                        >
+                          中奖历史
+                        </button>
                         <button
                           data-test="edit-favorite"
                           type="button"
@@ -436,7 +551,7 @@ onMounted(initializePage)
                     </td>
                   </tr>
                   <tr v-if="editingFavoriteId === favorite.id" class="favorites-edit-row">
-                    <td colspan="7">
+                    <td colspan="8">
                       <form class="favorites-edit-form" @submit.prevent="saveFavorite">
                         <label for="favoriteName">
                           收藏名称
@@ -479,6 +594,80 @@ onMounted(initializePage)
             </div>
           </div>
         </section>
+        <div v-if="historyDrawerOpen" class="favorite-history-mask" @click="closeHistory"></div>
+        <aside
+          v-if="historyDrawerOpen"
+          class="favorite-history-drawer"
+          role="dialog"
+          aria-modal="true"
+          aria-label="收藏中奖历史"
+        >
+          <header class="favorite-history-drawer__header">
+            <div>
+              <p>{{ selectedHistoryFavorite ? lotteryTypeText(selectedHistoryFavorite.lotteryType) : '大乐透' }}</p>
+              <h2>{{ selectedHistoryFavorite?.favoriteName || '收藏中奖历史' }}</h2>
+              <span>{{ selectedHistoryFavorite?.displayText }}</span>
+            </div>
+            <button type="button" aria-label="关闭收藏中奖历史" @click="closeHistory">×</button>
+          </header>
+
+          <div v-if="loadingHistory && !historyPage" class="favorite-history-state">正在加载中奖历史</div>
+          <div v-else-if="historyError" class="favorite-history-state favorite-history-state--error">
+            {{ historyError }}
+          </div>
+          <div v-else-if="historyPage" class="favorite-history-content">
+            <section v-if="historyPage.latestDrawResult" class="favorite-history-latest">
+              <span>最近一期</span>
+              <strong :class="drawResultClass(historyPage.latestDrawResult)">
+                {{ drawResultText(historyPage.latestDrawResult) }}
+              </strong>
+              <p>
+                第 {{ historyPage.latestDrawResult.issueNo }} 期，
+                {{ hitText(historyPage.latestDrawResult) }}
+              </p>
+            </section>
+
+            <div v-if="!historyPage.results.length" class="favorite-history-state">暂无中奖历史</div>
+            <div v-else class="favorite-history-list">
+              <article v-for="result in historyPage.results" :key="result.issueNo" class="favorite-history-item">
+                <div class="favorite-history-item__main">
+                  <div>
+                    <strong>第 {{ result.issueNo }} 期</strong>
+                    <span>{{ result.drawDate }}</span>
+                  </div>
+                  <span class="favorite-history-prize" :class="drawResultClass(result)">
+                    {{ drawResultText(result) }}
+                  </span>
+                </div>
+                <div class="favorite-history-item__numbers">
+                  <span>{{ formatStoredNumbers(result.drawFrontNumbers) }}</span>
+                  <small>+ {{ formatStoredNumbers(result.drawBackNumbers) }}</small>
+                </div>
+                <p>{{ hitText(result) }}</p>
+              </article>
+            </div>
+
+            <div v-if="historyPage.total > 0" class="favorite-history-pagination">
+              <span>共 {{ historyPage.total }} 次中奖，第 {{ historyPageNo }} / {{ historyTotalPages }} 页</span>
+              <div>
+                <button
+                  type="button"
+                  :disabled="!hasPreviousHistoryPage || loadingHistory"
+                  @click="changeHistoryPage(historyPageNo - 1)"
+                >
+                  上一页
+                </button>
+                <button
+                  type="button"
+                  :disabled="!hasNextHistoryPage || loadingHistory"
+                  @click="changeHistoryPage(historyPageNo + 1)"
+                >
+                  下一页
+                </button>
+              </div>
+            </div>
+          </div>
+        </aside>
   </ProfileShell>
 </template>
 
@@ -517,7 +706,8 @@ onMounted(initializePage)
 .favorites-search button,
 .favorites-pagination button,
 .favorites-actions button,
-.favorites-edit-actions button {
+.favorites-edit-actions button,
+.favorite-history-pagination button {
   min-width: fit-content;
   height: 36px;
   border: 1px solid #dbeafe;
@@ -535,7 +725,8 @@ onMounted(initializePage)
 .favorites-search button:disabled,
 .favorites-pagination button:disabled,
 .favorites-actions button:disabled,
-.favorites-edit-actions button:disabled {
+.favorites-edit-actions button:disabled,
+.favorite-history-pagination button:disabled {
   cursor: not-allowed;
   opacity: 0.58;
 }
@@ -669,7 +860,7 @@ onMounted(initializePage)
 
 .favorites-table {
   width: 100%;
-  min-width: 920px;
+  min-width: 1060px;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
@@ -705,15 +896,19 @@ onMounted(initializePage)
 }
 
 .favorites-table th:nth-child(5) {
-  width: 90px;
+  width: 110px;
 }
 
 .favorites-table th:nth-child(6) {
+  width: 90px;
+}
+
+.favorites-table th:nth-child(7) {
   width: 140px;
 }
 
 .favorites-table th:last-child {
-  width: 190px;
+  width: 210px;
   border-right: 1px solid #e2e8f0;
   border-radius: 0 10px 10px 0;
 }
@@ -798,6 +993,50 @@ onMounted(initializePage)
   color: #64748b;
 }
 
+.favorite-draw-result {
+  display: inline-grid;
+  min-width: 86px;
+  min-height: 44px;
+  align-content: center;
+  gap: 2px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #475569;
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.favorite-draw-result span {
+  line-height: 1.2;
+}
+
+.favorite-draw-result small {
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.favorite-draw-result--winning {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.favorite-draw-result--miss {
+  border-color: #dbeafe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.favorite-draw-result--empty {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #64748b;
+}
+
 .favorites-actions {
   display: flex;
   flex-wrap: wrap;
@@ -878,6 +1117,231 @@ onMounted(initializePage)
   gap: 8px;
 }
 
+.favorite-history-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: rgb(15 23 42 / 0.3);
+}
+
+.favorite-history-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 31;
+  width: min(560px, 100vw);
+  height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border-left: 1px solid #e2e8f0;
+  background: #ffffff;
+  box-shadow: -18px 0 42px rgb(15 23 42 / 0.16);
+}
+
+.favorite-history-drawer__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid #e2e8f0;
+  padding: 22px;
+}
+
+.favorite-history-drawer__header p,
+.favorite-history-drawer__header h2,
+.favorite-history-drawer__header span {
+  margin: 0;
+}
+
+.favorite-history-drawer__header p {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.favorite-history-drawer__header h2 {
+  margin-top: 6px;
+  color: #0f172a;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.favorite-history-drawer__header span {
+  display: block;
+  margin-top: 6px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.favorite-history-drawer__header button {
+  width: 34px;
+  height: 34px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.favorite-history-content {
+  padding: 18px 22px 22px;
+}
+
+.favorite-history-state {
+  margin: 18px 22px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  padding: 13px 14px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.favorite-history-state--error {
+  border-color: #fecaca;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.favorite-history-latest {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.favorite-history-latest span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.favorite-history-latest strong {
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.favorite-history-latest p {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.favorite-history-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.favorite-history-item {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 12px;
+  box-shadow: 0 8px 22px rgb(15 23 42 / 0.08);
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.favorite-history-item:hover {
+  border-color: #bfdbfe;
+  box-shadow: 0 12px 28px rgb(15 23 42 / 0.12);
+  transform: translateY(-1px);
+}
+
+.favorite-history-item__main {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.favorite-history-item__main div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.favorite-history-item__main strong {
+  overflow-wrap: anywhere;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.favorite-history-item__main div > span {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.favorite-history-item__numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  background: #f8fafc;
+  border-radius: 8px;
+  padding: 9px 10px;
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.favorite-history-item__numbers small {
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.favorite-history-item p {
+  margin: 0;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.favorite-history-prize {
+  display: inline-flex;
+  min-width: 58px;
+  flex: 0 0 auto;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.favorite-history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.favorite-history-pagination div {
+  display: flex;
+  gap: 8px;
+}
+
 @media (max-width: 860px) {
   .favorites-panel {
     padding: 20px;
@@ -900,6 +1364,15 @@ onMounted(initializePage)
 
   .favorites-edit-form {
     grid-template-columns: 1fr;
+  }
+
+  .favorite-history-drawer {
+    width: 100vw;
+  }
+
+  .favorite-history-pagination {
+    align-items: stretch;
+    flex-direction: column;
   }
 }
 </style>

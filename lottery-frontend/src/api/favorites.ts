@@ -1,5 +1,6 @@
 import { get, post } from '@/api/http'
 import type {
+  FavoriteDrawHistoryPage,
   FavoritePageQuery,
   LotteryNumberFavorite,
   LotteryNumberFavoriteCreateRequest,
@@ -16,6 +17,19 @@ export function fetchFavoritePage(query: FavoritePageQuery): Promise<LotteryNumb
     pageSize: query.pageSize,
     status: query.status,
     keyword: query.keyword,
+  })
+}
+
+/**
+ * 分页查询收藏号码的中奖历史实时分析结果。
+ */
+export function fetchFavoriteDrawHistory(
+  favoriteId: number,
+  query: { pageNo?: number, pageSize?: number },
+): Promise<FavoriteDrawHistoryPage> {
+  return get<FavoriteDrawHistoryPage>(`/api/lottery/favorites/${favoriteId}/winning-results`, {
+    pageNo: query.pageNo,
+    pageSize: query.pageSize,
   })
 }
 

@@ -97,6 +97,29 @@ const failedIssueRangeTask: LotterySyncTask = {
   },
 }
 
+const scheduledLatestTask: LotterySyncTask = {
+  ...runningTask,
+  taskNo: 'DLT-LATEST-SCHEDULED-001',
+  syncType: 'LATEST',
+  triggerSource: 'SCHEDULED',
+  status: 'SUCCESS',
+  requestParams: '{"source":"crawler.latest"}',
+  requestParamMap: { source: 'crawler.latest' },
+  startPage: null,
+  currentPage: null,
+  lastSuccessPage: null,
+  failedPage: null,
+  pageSize: null,
+  maxPages: null,
+  pageDelayMillis: null,
+  stopWhenLastPage: null,
+  successCount: 1,
+  skippedCount: 0,
+  failedCount: 0,
+  startTime: '2026-07-20T21:45:00',
+  finishTime: '2026-07-20T21:45:03',
+}
+
 const taskPage: LotterySyncTaskPage = {
   pageNo: 1,
   pageSize: 10,
@@ -190,7 +213,12 @@ describe('AdminLotterySyncView', () => {
     expect(wrapper.text()).toContain('数据同步管理')
     expect(wrapper.text()).toContain('退出登录')
 
-    await wrapper.findAll('.account-menu button')[2].trigger('click')
+    const logoutButton = wrapper
+      .findAll('.account-menu button')
+      .find((button) => button.text().includes('退出登录'))
+    expect(logoutButton).toBeTruthy()
+
+    await logoutButton?.trigger('click')
     await flushPromises()
 
     expect(logout).toHaveBeenCalledOnce()
@@ -269,6 +297,21 @@ describe('AdminLotterySyncView', () => {
     const requestSectionText =
       wrapper.findAll('.detail-section').find((section) => section.text().includes('请求范围'))?.text() ?? ''
     expect(requestSectionText).toMatch(/范围摘要[\s\S]*起始期号[\s\S]*结束期号[\s\S]*起始页[\s\S]*每页数量[\s\S]*最大扫描页数/)
+  })
+
+  it('shows scheduled trigger source with Chinese label in task detail drawer', async () => {
+    vi.mocked(fetchSyncTask).mockResolvedValue(scheduledLatestTask)
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.find('[data-testid="detail-DLT-HISTORY-FAILED-001"]').trigger('click')
+    await flushPromises()
+
+    const triggerSourceField = wrapper
+      .findAll('.detail-grid div')
+      .find((field) => field.text().includes('触发来源'))
+    expect(triggerSourceField?.text()).toContain('定时任务')
+    expect(triggerSourceField?.text()).not.toContain('SCHEDULED')
   })
 
   it('creates issue range task without maxPages in request body', async () => {

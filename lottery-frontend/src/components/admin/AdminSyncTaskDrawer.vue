@@ -10,6 +10,7 @@ import {
   statusLabel,
   syncTypeLabel,
   taskScopeText,
+  triggerSourceLabel,
 } from '@/utils/lotterySyncFormat'
 
 defineProps<{
@@ -80,7 +81,7 @@ const emit = defineEmits<{
           </div>
           <div>
             <dt>触发来源</dt>
-            <dd>{{ selectedTask.triggerSource }}</dd>
+            <dd>{{ triggerSourceLabel(selectedTask.triggerSource) }}</dd>
           </div>
         </dl>
       </section>

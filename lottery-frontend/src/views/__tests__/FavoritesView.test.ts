@@ -6,6 +6,7 @@ import {
   activateFavorite,
   deactivateFavorite,
   deleteFavorite,
+  fetchFavoriteDrawHistory,
   fetchFavoritePage,
   updateFavorite,
 } from '@/api/favorites'
@@ -33,6 +34,7 @@ vi.mock('@/api/user', () => ({
 
 vi.mock('@/api/favorites', () => ({
   fetchFavoritePage: vi.fn(),
+  fetchFavoriteDrawHistory: vi.fn(),
   updateFavorite: vi.fn(),
   deactivateFavorite: vi.fn(),
   activateFavorite: vi.fn(),
@@ -64,6 +66,18 @@ const activeFavorite = {
   favoriteTime: '2026-07-18T13:20:00',
   effectiveTime: '2026-07-18T13:20:00',
   cancelTime: null,
+  latestDrawResult: {
+    issueNo: '26076',
+    drawDate: '2026-07-18',
+    drawFrontNumbers: '01,05,12,23,35',
+    drawBackNumbers: '03,11',
+    frontHitCount: 5,
+    backHitCount: 2,
+    winning: true,
+    prizeLevel: 1,
+    prizeName: '一等奖',
+    ruleVersion: 'DLT_2019',
+  },
 }
 
 const cancelledFavorite = {
@@ -92,6 +106,7 @@ describe('FavoritesView', () => {
     push.mockReset()
     vi.mocked(fetchUserProfile).mockReset()
     vi.mocked(fetchFavoritePage).mockReset()
+    vi.mocked(fetchFavoriteDrawHistory).mockReset()
     vi.mocked(updateFavorite).mockReset()
     vi.mocked(deactivateFavorite).mockReset()
     vi.mocked(activateFavorite).mockReset()
@@ -99,6 +114,19 @@ describe('FavoritesView', () => {
     vi.mocked(logout).mockReset()
     vi.mocked(fetchUserProfile).mockResolvedValue(profile)
     mockFavoritePage()
+    vi.mocked(fetchFavoriteDrawHistory).mockResolvedValue({
+      pageNo: 1,
+      pageSize: 10,
+      total: 1,
+      pages: 1,
+      favoriteId: 101,
+      lotteryType: 'DLT',
+      frontNumbers: '01,05,12,23,35',
+      backNumbers: '03,11',
+      displayText: '01 05 12 23 35 + 03 11',
+      latestDrawResult: activeFavorite.latestDrawResult,
+      results: [activeFavorite.latestDrawResult],
+    })
     vi.mocked(updateFavorite).mockResolvedValue(activeFavorite)
     vi.mocked(deactivateFavorite).mockResolvedValue({ ...activeFavorite, status: 'CANCELLED' })
     vi.mocked(activateFavorite).mockResolvedValue({ ...cancelledFavorite, status: 'ACTIVE' })
@@ -121,8 +149,28 @@ describe('FavoritesView', () => {
     expect(wrapper.text()).toContain('我的收藏号码')
     expect(wrapper.text()).toContain('生日组合')
     expect(wrapper.text()).toContain('家人生日')
+    expect(wrapper.text()).toContain('一等奖')
+    expect(wrapper.text()).toContain('26076 期')
     expect(wrapper.findAll('.favorite-number-ball--front')).toHaveLength(5)
     expect(wrapper.findAll('.favorite-number-ball--back')).toHaveLength(2)
+  })
+
+  it('opens favorite draw history drawer from the latest result', async () => {
+    const wrapper = mount(FavoritesView)
+    await flushPromises()
+
+    await wrapper.find('[data-test="open-favorite-history"]').trigger('click')
+    await flushPromises()
+
+    expect(fetchFavoriteDrawHistory).toHaveBeenCalledWith(101, {
+      pageNo: 1,
+      pageSize: 10,
+    })
+    expect(wrapper.find('.favorite-history-drawer').exists()).toBe(true)
+    expect(wrapper.find('.favorite-history-drawer').text()).toContain('生日组合')
+    expect(wrapper.find('.favorite-history-drawer').text()).toContain('第 26076 期')
+    expect(wrapper.find('.favorite-history-drawer').text()).toContain('共 1 次中奖')
+    expect(wrapper.find('.favorite-history-drawer').text()).not.toContain('未中奖')
   })
 
   it('redirects anonymous visitor to login page', async () => {
