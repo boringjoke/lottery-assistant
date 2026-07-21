@@ -83,6 +83,18 @@ class LotteryUserRepositoryTest {
     }
 
     @Test
+    void userCredentialRepositoryFindsCredentialByUserIdAndType() {
+        LotteryUserCredentialMapper mapper = mock(LotteryUserCredentialMapper.class);
+        LotteryUserCredential credential = new LotteryUserCredential();
+        when(mapper.selectOne(anyUserCredentialWrapper())).thenReturn(credential);
+
+        LotteryUserCredentialRepository repository = new LotteryUserCredentialRepository(mapper);
+
+        assertThat(repository.findByUserIdAndCredentialType(10L, "EMAIL")).containsSame(credential);
+        verify(mapper).selectOne(anyUserCredentialWrapper());
+    }
+
+    @Test
     void userOAuthAccountRepositoryFindsAccountByProviderAndOpenId() {
         LotteryUserOAuthAccountMapper mapper = mock(LotteryUserOAuthAccountMapper.class);
         LotteryUserOAuthAccount account = new LotteryUserOAuthAccount();

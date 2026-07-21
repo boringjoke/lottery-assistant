@@ -22,6 +22,7 @@ import com.hotchpotch.lottery.draw.repository.LotteryDrawRepository;
 import com.hotchpotch.lottery.draw.repository.LotteryPrizeTierRepository;
 import com.hotchpotch.lottery.draw.repository.LotterySyncTaskRepository;
 import com.hotchpotch.lottery.favorite.service.LotteryFavoriteDrawResultGenerateService;
+import com.hotchpotch.lottery.notification.service.LotteryFavoriteWinningNotificationService;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
@@ -57,6 +58,7 @@ public class LotteryDrawSyncService {
     private final LotteryPrizeTierRepository prizeTierRepository;
     private final LotterySyncTaskRepository syncTaskRepository;
     private final LotteryFavoriteDrawResultGenerateService favoriteDrawResultGenerateService;
+    private final LotteryFavoriteWinningNotificationService favoriteWinningNotificationService;
     private final Object syncTaskCreationMonitor = new Object();
 
     /**
@@ -67,11 +69,23 @@ public class LotteryDrawSyncService {
             LotteryDrawRepository drawRepository,
             LotteryPrizeTierRepository prizeTierRepository,
             LotterySyncTaskRepository syncTaskRepository) {
-        this(crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository, null);
+        this(crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository, null, null);
     }
 
     /**
      * 初始化同步服务依赖的 crawler 客户端、数据仓储和收藏开奖结果生成服务。
+     */
+    public LotteryDrawSyncService(
+            SportteryCrawlerClient crawlerClient,
+            LotteryDrawRepository drawRepository,
+            LotteryPrizeTierRepository prizeTierRepository,
+            LotterySyncTaskRepository syncTaskRepository,
+            LotteryFavoriteDrawResultGenerateService favoriteDrawResultGenerateService) {
+        this(crawlerClient, drawRepository, prizeTierRepository, syncTaskRepository, favoriteDrawResultGenerateService, null);
+    }
+
+    /**
+     * 初始化同步服务依赖的 crawler 客户端、数据仓储和开奖后扩展服务。
      */
     @Autowired
     public LotteryDrawSyncService(
@@ -79,12 +93,14 @@ public class LotteryDrawSyncService {
             LotteryDrawRepository drawRepository,
             LotteryPrizeTierRepository prizeTierRepository,
             LotterySyncTaskRepository syncTaskRepository,
-            LotteryFavoriteDrawResultGenerateService favoriteDrawResultGenerateService) {
+            LotteryFavoriteDrawResultGenerateService favoriteDrawResultGenerateService,
+            LotteryFavoriteWinningNotificationService favoriteWinningNotificationService) {
         this.crawlerClient = crawlerClient;
         this.drawRepository = drawRepository;
         this.prizeTierRepository = prizeTierRepository;
         this.syncTaskRepository = syncTaskRepository;
         this.favoriteDrawResultGenerateService = favoriteDrawResultGenerateService;
+        this.favoriteWinningNotificationService = favoriteWinningNotificationService;
     }
 
     /**
@@ -991,6 +1007,7 @@ public class LotteryDrawSyncService {
     private boolean insertNewDrawAndGenerateFavoriteResults(CrawlerDraw draw) {
         LotteryDraw savedDraw = insertNewDraw(draw);
         generateFavoriteDrawResults(savedDraw);
+        generateFavoriteWinningNotifications(savedDraw);
         return true;
     }
 
@@ -1017,6 +1034,25 @@ public class LotteryDrawSyncService {
         } catch (RuntimeException ex) {
             log.warn(
                     "收藏开奖结果生成失败: lotteryType={}, issueNo={}",
+                    savedDraw.getLotteryType(),
+                    savedDraw.getIssueNo(),
+                    ex);
+        }
+    }
+
+    /**
+     * 开奖入库后生成收藏中奖站内通知；失败不影响开奖同步主链路。
+     */
+    private void generateFavoriteWinningNotifications(LotteryDraw savedDraw) {
+        if (favoriteWinningNotificationService == null) {
+            return;
+        }
+
+        try {
+            favoriteWinningNotificationService.generateForDraw(savedDraw);
+        } catch (RuntimeException ex) {
+            log.warn(
+                    "收藏中奖站内通知生成失败: lotteryType={}, issueNo={}",
                     savedDraw.getLotteryType(),
                     savedDraw.getIssueNo(),
                     ex);

@@ -99,6 +99,15 @@ public class LotteryFavoriteAnalyzeService {
     /**
      * 分析单注收藏号码与单期开奖的命中结果。
      */
+    public LotteryFavoriteDrawHistoryItemResponse analyzeDraw(LotteryNumberFavorite favorite, LotteryDraw draw) {
+        requireDltFavorite(favorite);
+
+        return analyzeDraw(parseFavoriteNumber(favorite), draw);
+    }
+
+    /**
+     * 分析单注号码与单期开奖的命中结果。
+     */
     public LotteryFavoriteDrawHistoryItemResponse analyzeDraw(LotteryDltNumber favoriteNumber, LotteryDraw draw) {
         LotteryDltNumber drawNumber = numberService.parseSingle(draw.getFrontNumbers() + " + " + draw.getBackNumbers());
         int frontHitCount = hitCount(favoriteNumber.frontNumbers(), drawNumber.frontNumbers());

@@ -32,6 +32,10 @@ public class LotteryUser {
     @TableField("status")
     private String status;
 
+    /** 是否开启邮箱通知。 */
+    @TableField("email_notification_enabled")
+    private Boolean emailNotificationEnabled;
+
     /** 最近登录时间。 */
     @TableField("last_login_time")
     private LocalDateTime lastLoginTime;

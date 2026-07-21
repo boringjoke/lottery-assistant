@@ -67,7 +67,9 @@ class UserProfileControllerTest {
     void updateProfileUsesRequestBody() throws Exception {
         when(userProfileService.updateProfile(10L, new UserProfileUpdateRequest(
                 "新昵称",
-                "/avatars/avatar-02.svg")))
+                "/avatars/avatar-02.svg",
+                true,
+                "user@example.com")))
                 .thenReturn(response("新昵称", "/avatars/avatar-02.svg"));
 
         mockMvc.perform(post("/api/user/profile/update")
@@ -76,12 +78,15 @@ class UserProfileControllerTest {
                         .content("""
                                 {
                                     "nickname": "新昵称",
-                                    "avatarUrl": "/avatars/avatar-02.svg"
+                                    "avatarUrl": "/avatars/avatar-02.svg",
+                                    "emailNotificationEnabled": true,
+                                    "notificationEmail": "user@example.com"
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.nickname").value("新昵称"))
-                .andExpect(jsonPath("$.data.avatarUrl").value("/avatars/avatar-02.svg"));
+                .andExpect(jsonPath("$.data.avatarUrl").value("/avatars/avatar-02.svg"))
+                .andExpect(jsonPath("$.data.emailNotificationEnabled").value(false));
         verify(authSessionService).updateSessionProfile("token-001", "新昵称", "/avatars/avatar-02.svg");
     }
 
@@ -95,6 +100,7 @@ class UserProfileControllerTest {
                 "normal",
                 "138****8000",
                 "n****l@example.com",
+                false,
                 LocalDateTime.of(2026, 7, 18, 10, 0),
                 LocalDateTime.of(2026, 7, 18, 12, 0));
     }

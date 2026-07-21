@@ -26,6 +26,7 @@ import com.hotchpotch.lottery.draw.repository.LotteryDrawRepository;
 import com.hotchpotch.lottery.draw.repository.LotteryPrizeTierRepository;
 import com.hotchpotch.lottery.draw.repository.LotterySyncTaskRepository;
 import com.hotchpotch.lottery.favorite.service.LotteryFavoriteDrawResultGenerateService;
+import com.hotchpotch.lottery.notification.service.LotteryFavoriteWinningNotificationService;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -316,6 +317,137 @@ class LotteryDrawSyncServiceTest {
         when(prizeTierRepository.insertBatch(any())).thenReturn(2);
         when(favoriteDrawResultGenerateService.generateForDraw(any()))
                 .thenThrow(new BusinessException(ErrorCode.INTERNAL_ERROR, "收藏历史生成失败"));
+
+        LotteryDrawSyncResult result = service.syncLatestDraw("ADMIN");
+
+        ArgumentCaptor<LotterySyncTask> taskCaptor = ArgumentCaptor.forClass(LotterySyncTask.class);
+        verify(syncTaskRepository).updateById(taskCaptor.capture());
+        assertThat(taskCaptor.getValue().getStatus()).isEqualTo("SUCCESS");
+        assertThat(result.status()).isEqualTo("SUCCESS");
+        assertThat(result.successCount()).isEqualTo(1);
+        assertThat(result.failedCount()).isZero();
+    }
+
+    /**
+     * 验证新开奖首次入库成功后会触发收藏中奖站内通知生成。
+     */
+    @Test
+    void syncLatestDrawGeneratesFavoriteWinningNotificationsAfterInsertingNewDraw() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryFavoriteWinningNotificationService favoriteWinningNotificationService =
+                org.mockito.Mockito.mock(LotteryFavoriteWinningNotificationService.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient,
+                drawRepository,
+                prizeTierRepository,
+                syncTaskRepository,
+                null,
+                favoriteWinningNotificationService);
+
+        when(crawlerClient.fetchLatestDraw()).thenReturn(new CrawlerDrawResponse(sampleCrawlerDraw()));
+        when(drawRepository.findByLotteryTypeAndIssueNo("DLT", "26076")).thenReturn(Optional.empty());
+        when(syncTaskRepository.insert(any())).thenAnswer(invocation -> {
+            LotterySyncTask task = invocation.getArgument(0);
+            task.setId(18L);
+            return 1;
+        });
+        when(drawRepository.insert(any())).thenAnswer(invocation -> {
+            LotteryDraw draw = invocation.getArgument(0);
+            draw.setId(88L);
+            return 1;
+        });
+        when(prizeTierRepository.insertBatch(any())).thenReturn(2);
+        when(favoriteWinningNotificationService.generateForDraw(any())).thenReturn(1);
+
+        LotteryDrawSyncResult result = service.syncLatestDraw("ADMIN");
+
+        ArgumentCaptor<LotteryDraw> drawCaptor = ArgumentCaptor.forClass(LotteryDraw.class);
+        verify(favoriteWinningNotificationService).generateForDraw(drawCaptor.capture());
+        assertThat(drawCaptor.getValue().getId()).isEqualTo(88L);
+        assertThat(drawCaptor.getValue().getIssueNo()).isEqualTo("26076");
+        assertThat(result.status()).isEqualTo("SUCCESS");
+        assertThat(result.successCount()).isEqualTo(1);
+    }
+
+    /**
+     * 验证已存在开奖跳过时不会重复触发收藏中奖站内通知生成。
+     */
+    @Test
+    void syncLatestDrawDoesNotGenerateFavoriteWinningNotificationsWhenDrawAlreadyExists() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryFavoriteWinningNotificationService favoriteWinningNotificationService =
+                org.mockito.Mockito.mock(LotteryFavoriteWinningNotificationService.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient,
+                drawRepository,
+                prizeTierRepository,
+                syncTaskRepository,
+                null,
+                favoriteWinningNotificationService);
+        LotteryDraw existingDraw = new LotteryDraw();
+        existingDraw.setId(88L);
+        LotteryPrizeTier existingFirstTier = new LotteryPrizeTier();
+        existingFirstTier.setPrizeName("一等奖");
+        LotteryPrizeTier existingSecondTier = new LotteryPrizeTier();
+        existingSecondTier.setPrizeName("二等奖");
+
+        when(crawlerClient.fetchLatestDraw()).thenReturn(new CrawlerDrawResponse(sampleCrawlerDraw()));
+        when(drawRepository.findByLotteryTypeAndIssueNo("DLT", "26076")).thenReturn(Optional.of(existingDraw));
+        when(prizeTierRepository.findByDrawId(88L)).thenReturn(List.of(existingFirstTier, existingSecondTier));
+        when(syncTaskRepository.insert(any())).thenAnswer(invocation -> {
+            LotterySyncTask task = invocation.getArgument(0);
+            task.setId(19L);
+            return 1;
+        });
+
+        LotteryDrawSyncResult result = service.syncLatestDraw("ADMIN");
+
+        verify(favoriteWinningNotificationService, never()).generateForDraw(any());
+        assertThat(result.status()).isEqualTo("SUCCESS");
+        assertThat(result.successCount()).isZero();
+        assertThat(result.skippedCount()).isEqualTo(1);
+    }
+
+    /**
+     * 验证收藏中奖站内通知生成失败不影响开奖同步成功状态。
+     */
+    @Test
+    void syncLatestDrawStillSucceedsWhenFavoriteWinningNotificationGenerationFails() {
+        SportteryCrawlerClient crawlerClient = org.mockito.Mockito.mock(SportteryCrawlerClient.class);
+        LotteryDrawRepository drawRepository = org.mockito.Mockito.mock(LotteryDrawRepository.class);
+        LotteryPrizeTierRepository prizeTierRepository = org.mockito.Mockito.mock(LotteryPrizeTierRepository.class);
+        LotterySyncTaskRepository syncTaskRepository = org.mockito.Mockito.mock(LotterySyncTaskRepository.class);
+        LotteryFavoriteWinningNotificationService favoriteWinningNotificationService =
+                org.mockito.Mockito.mock(LotteryFavoriteWinningNotificationService.class);
+        LotteryDrawSyncService service = new LotteryDrawSyncService(
+                crawlerClient,
+                drawRepository,
+                prizeTierRepository,
+                syncTaskRepository,
+                null,
+                favoriteWinningNotificationService);
+
+        when(crawlerClient.fetchLatestDraw()).thenReturn(new CrawlerDrawResponse(sampleCrawlerDraw()));
+        when(drawRepository.findByLotteryTypeAndIssueNo("DLT", "26076")).thenReturn(Optional.empty());
+        when(syncTaskRepository.insert(any())).thenAnswer(invocation -> {
+            LotterySyncTask task = invocation.getArgument(0);
+            task.setId(20L);
+            return 1;
+        });
+        when(drawRepository.insert(any())).thenAnswer(invocation -> {
+            LotteryDraw draw = invocation.getArgument(0);
+            draw.setId(88L);
+            return 1;
+        });
+        when(prizeTierRepository.insertBatch(any())).thenReturn(2);
+        when(favoriteWinningNotificationService.generateForDraw(any()))
+                .thenThrow(new BusinessException(ErrorCode.INTERNAL_ERROR, "中奖通知生成失败"));
 
         LotteryDrawSyncResult result = service.syncLatestDraw("ADMIN");
 

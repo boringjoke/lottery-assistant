@@ -29,6 +29,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/api/lottery/favorites/**").hasAnyRole("USER", "ADMIN")
+                        .requestMatchers("/api/user/notifications/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/api/draws/**",

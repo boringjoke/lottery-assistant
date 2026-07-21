@@ -37,6 +37,7 @@ class LotteryUserMapperXmlTest {
         assertThat(xml).contains("column=\"nickname\" property=\"nickname\"");
         assertThat(xml).contains("column=\"avatar_url\" property=\"avatarUrl\"");
         assertThat(xml).contains("column=\"status\" property=\"status\"");
+        assertThat(xml).contains("column=\"email_notification_enabled\" property=\"emailNotificationEnabled\"");
         assertThat(xml).contains("column=\"last_login_time\" property=\"lastLoginTime\"");
         assertThat(xml).contains("column=\"create_time\" property=\"createTime\"");
         assertThat(xml).contains("column=\"update_time\" property=\"updateTime\"");

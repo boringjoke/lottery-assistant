@@ -2,6 +2,7 @@ package com.hotchpotch.lottery.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -55,6 +56,7 @@ class UserProfileServiceTest {
         assertThat(response.username()).isEqualTo("normal");
         assertThat(response.maskedPhone()).isEqualTo("138****8000");
         assertThat(response.maskedEmail()).isEqualTo("n****l@example.com");
+        assertThat(response.emailNotificationEnabled()).isFalse();
         assertThat(response.roles()).containsExactly("USER");
         assertThat(response.createTime()).isEqualTo(LocalDateTime.of(2026, 7, 18, 10, 0));
         assertThat(response.lastLoginTime()).isEqualTo(LocalDateTime.of(2026, 7, 18, 12, 0));
@@ -73,7 +75,9 @@ class UserProfileServiceTest {
 
         var response = service.updateProfile(10L, new UserProfileUpdateRequest(
                 " 新昵称 ",
-                " /avatars/avatar-02.svg "));
+                " /avatars/avatar-02.svg ",
+                null,
+                null));
 
         assertThat(response.nickname()).isEqualTo("新昵称");
         assertThat(response.avatarUrl()).isEqualTo("/avatars/avatar-02.svg");
@@ -90,7 +94,7 @@ class UserProfileServiceTest {
         when(userRepository.findById(10L)).thenReturn(Optional.of(user()));
         UserProfileService service = service();
 
-        assertThatThrownBy(() -> service.updateProfile(10L, new UserProfileUpdateRequest(" ", null)))
+        assertThatThrownBy(() -> service.updateProfile(10L, new UserProfileUpdateRequest(" ", null, null, null)))
                 .isInstanceOf(BusinessException.class)
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_REQUEST);
@@ -106,8 +110,85 @@ class UserProfileServiceTest {
 
         assertThatThrownBy(() -> service.updateProfile(10L, new UserProfileUpdateRequest(
                 "新昵称",
-                "https://example.com/avatar.png")))
+                "https://example.com/avatar.png",
+                null,
+                null)))
                 .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+    }
+
+    /**
+     * 验证开启邮箱通知时，如果当前没有邮箱且本次未填写邮箱则拒绝。
+     */
+    @Test
+    void updateProfileRejectsEmailNotificationEnabledWithoutEmail() {
+        LotteryUser user = user();
+        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
+        when(credentialRepository.findByUserIdAndCredentialType(10L, "EMAIL")).thenReturn(Optional.empty());
+        UserProfileService service = service();
+
+        assertThatThrownBy(() -> service.updateProfile(10L, new UserProfileUpdateRequest(
+                "普通用户",
+                null,
+                true,
+                null)))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("开启邮箱通知需要先填写邮箱")
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.INVALID_REQUEST);
+    }
+
+    /**
+     * 验证开启邮箱通知时可绑定本次填写的邮箱。
+     */
+    @Test
+    void updateProfileBindsEmailWhenEnablingEmailNotification() {
+        LotteryUser user = user();
+        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
+        when(credentialRepository.findByCredentialTypeAndIdentifier("EMAIL", "new@example.com"))
+                .thenReturn(Optional.empty());
+        when(credentialRepository.findByUserIdAndCredentialType(10L, "EMAIL"))
+                .thenReturn(Optional.empty());
+        when(credentialRepository.findByUserId(10L)).thenReturn(List.of(
+                credential("USERNAME", "normal"),
+                credential("EMAIL", "new@example.com")));
+        when(roleRepository.findByUserId(10L)).thenReturn(List.of(role("USER")));
+        UserProfileService service = service();
+
+        var response = service.updateProfile(10L, new UserProfileUpdateRequest(
+                "普通用户",
+                null,
+                true,
+                " New@Example.com "));
+
+        assertThat(user.getEmailNotificationEnabled()).isTrue();
+        assertThat(response.emailNotificationEnabled()).isTrue();
+        assertThat(response.maskedEmail()).isEqualTo("n****w@example.com");
+        verify(credentialRepository).insert(any(LotteryUserCredential.class));
+        verify(userRepository).updateById(user);
+    }
+
+    /**
+     * 验证邮箱已被其他用户占用时不能绑定。
+     */
+    @Test
+    void updateProfileRejectsEmailUsedByOtherUser() {
+        LotteryUser user = user();
+        LotteryUserCredential usedCredential = credential("EMAIL", "used@example.com");
+        usedCredential.setUserId(99L);
+        when(userRepository.findById(10L)).thenReturn(Optional.of(user));
+        when(credentialRepository.findByCredentialTypeAndIdentifier("EMAIL", "used@example.com"))
+                .thenReturn(Optional.of(usedCredential));
+        UserProfileService service = service();
+
+        assertThatThrownBy(() -> service.updateProfile(10L, new UserProfileUpdateRequest(
+                "普通用户",
+                null,
+                true,
+                "used@example.com")))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("邮箱已被其他账号使用")
                 .extracting("errorCode")
                 .isEqualTo(ErrorCode.INVALID_REQUEST);
     }
@@ -136,6 +217,7 @@ class UserProfileServiceTest {
         user.setNickname("普通用户");
         user.setAvatarUrl(null);
         user.setStatus("ACTIVE");
+        user.setEmailNotificationEnabled(false);
         user.setCreateTime(LocalDateTime.of(2026, 7, 18, 10, 0));
         user.setLastLoginTime(LocalDateTime.of(2026, 7, 18, 12, 0));
         return user;

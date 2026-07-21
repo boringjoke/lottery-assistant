@@ -28,12 +28,12 @@ class ApplicationYamlTest {
     }
 
     @Test
-    void autoLatestSyncDefaultsToDisabledCronSchedule() {
+    void autoLatestSyncDefaultsToEnabledAndSupportsCronOverride() {
         String yaml = readResource("application.yaml");
 
         assertThat(yaml).contains("auto-latest:");
-        assertThat(yaml).contains("enabled: ${LOTTERY_SYNC_AUTO_LATEST_ENABLED:false}");
-        assertThat(yaml).contains("cron: ${LOTTERY_SYNC_AUTO_LATEST_CRON:0 45 21 ? * MON,WED,SAT}");
+        assertThat(yaml).contains("enabled: ${LOTTERY_SYNC_AUTO_LATEST_ENABLED:true}");
+        assertThat(yaml).contains("cron: ${LOTTERY_SYNC_AUTO_LATEST_CRON:");
         assertThat(yaml).contains("zone: ${LOTTERY_SYNC_AUTO_LATEST_ZONE:Asia/Shanghai}");
     }
 

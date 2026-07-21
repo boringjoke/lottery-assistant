@@ -9,6 +9,7 @@
         <result column="nickname" property="nickname"/>
         <result column="avatar_url" property="avatarUrl"/>
         <result column="status" property="status"/>
+        <result column="email_notification_enabled" property="emailNotificationEnabled"/>
         <result column="last_login_time" property="lastLoginTime"/>
         <result column="create_time" property="createTime"/>
         <result column="update_time" property="updateTime"/>

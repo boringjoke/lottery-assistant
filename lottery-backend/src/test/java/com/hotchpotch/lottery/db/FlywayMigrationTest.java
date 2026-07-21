@@ -130,6 +130,37 @@ class FlywayMigrationTest {
         assertThat(migration).doesNotContainIgnoringCase("FOREIGN KEY");
     }
 
+    @Test
+    void v7CreatesUserNotificationTableWithoutDatabaseForeignKeys() {
+        String migration = readMigration("db/migration/V7__create_user_notifications_table.sql");
+
+        assertThat(migration).contains("CREATE TABLE user_notifications");
+        assertThat(migration).contains("user_id BIGINT NOT NULL");
+        assertThat(migration).contains("notification_type VARCHAR(64) NOT NULL");
+        assertThat(migration).contains("business_type VARCHAR(64) NOT NULL");
+        assertThat(migration).contains("business_key VARCHAR(128) NOT NULL");
+        assertThat(migration).contains("title VARCHAR(128) NOT NULL");
+        assertThat(migration).contains("content VARCHAR(512) NOT NULL");
+        assertThat(migration).contains("read_status VARCHAR(32) NOT NULL DEFAULT 'UNREAD'");
+        assertThat(migration).contains("read_time DATETIME NULL");
+        assertThat(migration).contains("create_time");
+        assertThat(migration).contains("update_time");
+        assertThat(migration).contains("UNIQUE KEY uk_notification_business (notification_type, business_key)");
+        assertThat(migration).contains("KEY idx_user_read_time (user_id, read_status, create_time)");
+        assertThat(migration).contains("KEY idx_user_create_time (user_id, create_time)");
+        assertThat(migration).doesNotContainIgnoringCase("FOREIGN KEY");
+    }
+
+    @Test
+    void v8AddsUserEmailNotificationSettingWithoutDatabaseForeignKeys() {
+        String migration = readMigration("db/migration/V8__add_user_email_notification_setting.sql");
+
+        assertThat(migration).contains("ALTER TABLE lottery_users");
+        assertThat(migration).contains("email_notification_enabled TINYINT(1) NOT NULL DEFAULT 0");
+        assertThat(migration).contains("idx_lottery_users_email_notification_enabled");
+        assertThat(migration).doesNotContainIgnoringCase("FOREIGN KEY");
+    }
+
     private String readMigration(String resourcePath) {
         URL resource = getClass().getClassLoader().getResource(resourcePath);
 

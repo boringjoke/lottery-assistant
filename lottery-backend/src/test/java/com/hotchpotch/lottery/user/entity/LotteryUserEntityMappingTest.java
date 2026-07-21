@@ -20,6 +20,7 @@ class LotteryUserEntityMappingTest {
                         "nickname",
                         "avatarUrl",
                         "status",
+                        "emailNotificationEnabled",
                         "lastLoginTime",
                         "createTime",
                         "updateTime")

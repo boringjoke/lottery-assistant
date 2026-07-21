@@ -14,6 +14,7 @@ import java.util.List;
  * @param username 用户名
  * @param maskedPhone 脱敏手机号
  * @param maskedEmail 脱敏邮箱
+ * @param emailNotificationEnabled 是否开启邮箱通知
  * @param createTime 创建时间
  * @param lastLoginTime 最近登录时间
  */
@@ -26,6 +27,7 @@ public record UserProfileResponse(
         String username,
         String maskedPhone,
         String maskedEmail,
+        Boolean emailNotificationEnabled,
         LocalDateTime createTime,
         LocalDateTime lastLoginTime) {
 }

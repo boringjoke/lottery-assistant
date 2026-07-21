@@ -41,6 +41,17 @@ public class LotteryUserCredentialRepository {
     }
 
     /**
+     * 按用户和凭证类型查询登录凭证。
+     */
+    public Optional<LotteryUserCredential> findByUserIdAndCredentialType(Long userId, String credentialType) {
+        LotteryUserCredential credential = lotteryUserCredentialMapper.selectOne(Wrappers.<LotteryUserCredential>lambdaQuery()
+                .eq(LotteryUserCredential::getUserId, userId)
+                .eq(LotteryUserCredential::getCredentialType, credentialType));
+
+        return Optional.ofNullable(credential);
+    }
+
+    /**
      * 插入登录凭证。
      */
     public int insert(LotteryUserCredential credential) {

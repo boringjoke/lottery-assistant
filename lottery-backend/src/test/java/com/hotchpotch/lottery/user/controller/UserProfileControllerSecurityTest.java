@@ -78,6 +78,8 @@ class UserProfileControllerSecurityTest {
     void profileUpdateAllowsUserAccess() throws Exception {
         when(userProfileService.updateProfile(10L, new com.hotchpotch.lottery.user.record.UserProfileUpdateRequest(
                 "新昵称",
+                null,
+                null,
                 null)))
                 .thenReturn(response());
 
@@ -114,6 +116,7 @@ class UserProfileControllerSecurityTest {
                 "normal",
                 "138****8000",
                 "n****l@example.com",
+                false,
                 LocalDateTime.of(2026, 7, 18, 10, 0),
                 LocalDateTime.of(2026, 7, 18, 12, 0));
     }
