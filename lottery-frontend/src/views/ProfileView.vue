@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 
 import { logout } from '@/api/auth'
 import { fetchUserProfile, updateUserProfile } from '@/api/user'
+import AppToast from '@/components/AppToast.vue'
 import ProfileShell from '@/components/profile/ProfileShell.vue'
 import type { CurrentUser } from '@/types/auth'
 import type { UserProfile } from '@/types/user'
@@ -13,11 +14,14 @@ const router = useRouter()
 const profile = ref<UserProfile | null>(null)
 const loading = ref(false)
 const errorMessage = ref('')
-const noticeMessage = ref('')
+const toastMessage = ref('')
+const toastType = ref<'success' | 'error' | 'info'>('info')
 const authLoading = ref(false)
 const saving = ref(false)
 const nicknameDraft = ref('')
 const avatarDraft = ref<string | null>(null)
+const emailNotificationEnabledDraft = ref(false)
+const notificationEmailDraft = ref('')
 
 const avatarOptions = Array.from({ length: 8 }, (_, index) => {
   const avatarNo = String(index + 1).padStart(2, '0')
@@ -50,12 +54,16 @@ const roleText = computed(() => {
   return '普通用户'
 })
 const statusText = computed(() => profile.value?.status === 'ACTIVE' ? '正常' : profile.value?.status || '-')
+const needsNotificationEmail = computed(() => emailNotificationEnabledDraft.value && !profile.value?.maskedEmail)
 const hasProfileChanges = computed(() => {
   if (!profile.value) {
     return false
   }
 
-  return nicknameDraft.value.trim() !== profile.value.nickname || avatarDraft.value !== profile.value.avatarUrl
+  return nicknameDraft.value.trim() !== profile.value.nickname
+    || avatarDraft.value !== profile.value.avatarUrl
+    || emailNotificationEnabledDraft.value !== profile.value.emailNotificationEnabled
+    || (needsNotificationEmail.value && notificationEmailDraft.value.trim() !== '')
 })
 
 function formatTime(value: string | null | undefined): string {
@@ -64,6 +72,15 @@ function formatTime(value: string | null | undefined): string {
   }
 
   return value.replace('T', ' ').slice(0, 16)
+}
+
+function showToast(message: string, type: 'success' | 'error' | 'info' = 'info') {
+  toastType.value = type
+  toastMessage.value = message
+}
+
+function closeToast() {
+  toastMessage.value = ''
 }
 
 async function loadProfile() {
@@ -93,7 +110,8 @@ async function loadProfile() {
 function resetDraft() {
   nicknameDraft.value = profile.value?.nickname ?? ''
   avatarDraft.value = profile.value?.avatarUrl ?? null
-  noticeMessage.value = ''
+  emailNotificationEnabledDraft.value = profile.value?.emailNotificationEnabled ?? false
+  notificationEmailDraft.value = ''
 }
 
 async function saveProfile() {
@@ -103,17 +121,19 @@ async function saveProfile() {
 
   saving.value = true
   errorMessage.value = ''
-  noticeMessage.value = ''
+  closeToast()
 
   try {
     profile.value = await updateUserProfile({
       nickname: nicknameDraft.value,
       avatarUrl: avatarDraft.value,
+      emailNotificationEnabled: emailNotificationEnabledDraft.value,
+      notificationEmail: needsNotificationEmail.value ? notificationEmailDraft.value : null,
     })
     resetDraft()
-    noticeMessage.value = '个人资料已保存'
+    showToast('个人资料已保存', 'success')
   } catch (error) {
-    errorMessage.value = getErrorMessage(error)
+    showToast(getErrorMessage(error), 'error')
   } finally {
     saving.value = false
   }
@@ -140,6 +160,7 @@ onMounted(loadProfile)
     active-nav="profile"
     @logout="handleLogout"
   >
+    <AppToast :message="toastMessage" :type="toastType" @close="closeToast" />
     <section class="profile-card">
           <div class="profile-card__header">
             <div>
@@ -156,7 +177,6 @@ onMounted(loadProfile)
 
           <template v-else-if="profile">
             <div v-if="errorMessage" class="profile-state profile-state--error">{{ errorMessage }}</div>
-            <div v-if="noticeMessage" class="profile-state profile-state--success">{{ noticeMessage }}</div>
 
             <div class="profile-overview">
               <div class="profile-avatar" aria-hidden="true">
@@ -201,6 +221,30 @@ onMounted(loadProfile)
                 </div>
               </fieldset>
 
+              <fieldset class="profile-notification-settings">
+                <legend>通知设置</legend>
+                <label class="profile-toggle">
+                  <input v-model="emailNotificationEnabledDraft" type="checkbox" />
+                  <span class="profile-toggle__track" aria-hidden="true"></span>
+                  <span>邮箱通知</span>
+                </label>
+                <div class="profile-email-state">
+                  <span>当前邮箱</span>
+                  <strong>{{ profile.maskedEmail || '未设置' }}</strong>
+                </div>
+                <div v-if="needsNotificationEmail" class="profile-field">
+                  <label for="notificationEmail">通知邮箱</label>
+                  <input
+                    id="notificationEmail"
+                    v-model="notificationEmailDraft"
+                    type="email"
+                    maxlength="128"
+                    autocomplete="email"
+                    required
+                  />
+                </div>
+              </fieldset>
+
               <div class="profile-form-actions">
                 <button
                   class="profile-save-button"
@@ -232,6 +276,10 @@ onMounted(loadProfile)
               <div>
                 <dt>邮箱</dt>
                 <dd>{{ profile.maskedEmail || '-' }}</dd>
+              </div>
+              <div>
+                <dt>邮箱通知</dt>
+                <dd>{{ profile.emailNotificationEnabled ? '已开启' : '未开启' }}</dd>
               </div>
               <div>
                 <dt>角色</dt>
@@ -317,12 +365,6 @@ onMounted(loadProfile)
   color: #b91c1c;
 }
 
-.profile-state--success {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
-  color: #15803d;
-}
-
 .profile-overview {
   display: flex;
   align-items: center;
@@ -394,7 +436,8 @@ onMounted(loadProfile)
 }
 
 .profile-field label,
-.profile-avatar-picker legend {
+.profile-avatar-picker legend,
+.profile-notification-settings legend {
   color: #334155;
   font-size: 14px;
   font-weight: 900;
@@ -424,6 +467,89 @@ onMounted(loadProfile)
   margin: 0;
   border: 0;
   padding: 0;
+}
+
+.profile-notification-settings {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.profile-toggle {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 10px;
+  color: #334155;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.profile-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.profile-toggle__track {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: background 0.18s;
+}
+
+.profile-toggle__track::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 2px 6px rgb(15 23 42 / 0.18);
+  content: "";
+  transition: transform 0.18s;
+}
+
+.profile-toggle input:checked + .profile-toggle__track {
+  background: #2563eb;
+}
+
+.profile-toggle input:checked + .profile-toggle__track::after {
+  transform: translateX(18px);
+}
+
+.profile-toggle input:focus-visible + .profile-toggle__track {
+  box-shadow: 0 0 0 3px rgb(191 219 254 / 0.8);
+}
+
+.profile-email-state {
+  display: flex;
+  max-width: 420px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid #f1f5f9;
+  border-radius: 12px;
+  background: #f8fafc;
+  padding: 11px 13px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.profile-email-state strong {
+  overflow-wrap: anywhere;
+  color: #0f172a;
+  text-align: right;
 }
 
 .profile-avatar-grid {

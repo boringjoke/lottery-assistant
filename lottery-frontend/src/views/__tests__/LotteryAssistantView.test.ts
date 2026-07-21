@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { fetchCurrentUser, logout } from '@/api/auth'
+import { fetchUnreadNotificationCount } from '@/api/notifications'
 import LotteryAssistantView from '../LotteryAssistantView.vue'
 
 const push = vi.fn()
@@ -15,6 +16,10 @@ vi.mock('vue-router', () => ({
 vi.mock('@/api/auth', () => ({
   fetchCurrentUser: vi.fn(),
   logout: vi.fn(),
+}))
+
+vi.mock('@/api/notifications', () => ({
+  fetchUnreadNotificationCount: vi.fn(),
 }))
 
 function mountView() {
@@ -36,7 +41,9 @@ describe('LotteryAssistantView', () => {
     replace.mockReset()
     vi.mocked(fetchCurrentUser).mockReset()
     vi.mocked(logout).mockReset()
+    vi.mocked(fetchUnreadNotificationCount).mockReset()
     vi.mocked(fetchCurrentUser).mockRejectedValue(new Error('请先登录'))
+    vi.mocked(fetchUnreadNotificationCount).mockResolvedValue(0)
   })
 
   it('shows login entry and navigates to login page', async () => {
@@ -72,10 +79,11 @@ describe('LotteryAssistantView', () => {
 
     expect(wrapper.text()).toContain('个人中心')
     expect(wrapper.text()).toContain('我的收藏')
+    expect(wrapper.text()).toContain('我的通知')
     expect(wrapper.text()).toContain('数据同步管理')
     expect(wrapper.text()).toContain('退出登录')
 
-    await wrapper.findAll('.account-menu button')[3].trigger('click')
+    await wrapper.findAll('.account-menu button')[4].trigger('click')
     await flushPromises()
 
     expect(logout).toHaveBeenCalledOnce()

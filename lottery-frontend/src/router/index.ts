@@ -3,6 +3,7 @@ import AdminLotterySyncView from '@/views/AdminLotterySyncView.vue'
 import FavoritesView from '@/views/FavoritesView.vue'
 import LoginView from '@/views/LoginView.vue'
 import LotteryAssistantView from '@/views/LotteryAssistantView.vue'
+import NotificationsView from '@/views/NotificationsView.vue'
 import ProfileView from '@/views/ProfileView.vue'
 
 const router = createRouter({
@@ -31,6 +32,11 @@ const router = createRouter({
       path: '/profile/favorites',
       name: 'profile-favorites',
       component: FavoritesView,
+    },
+    {
+      path: '/profile/notifications',
+      name: 'profile-notifications',
+      component: NotificationsView,
     },
     {
       path: '/admin/lottery-sync',

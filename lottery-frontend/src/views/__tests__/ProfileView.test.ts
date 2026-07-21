@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { logout } from '@/api/auth'
+import { fetchUnreadNotificationCount } from '@/api/notifications'
 import { fetchUserProfile, updateUserProfile } from '@/api/user'
 import ProfileView from '../ProfileView.vue'
 
@@ -20,6 +21,10 @@ vi.mock('@/api/auth', () => ({
   logout: vi.fn(),
 }))
 
+vi.mock('@/api/notifications', () => ({
+  fetchUnreadNotificationCount: vi.fn(),
+}))
+
 vi.mock('@/api/user', () => ({
   fetchUserProfile: vi.fn(),
   updateUserProfile: vi.fn(),
@@ -34,8 +39,14 @@ const profile = {
   username: 'normal',
   maskedPhone: '138****8000',
   maskedEmail: 'n****l@example.com',
+  emailNotificationEnabled: false,
   createTime: '2026-07-18T10:00:00',
   lastLoginTime: '2026-07-18T12:00:00',
+}
+
+const profileWithoutEmail = {
+  ...profile,
+  maskedEmail: null,
 }
 
 describe('ProfileView', () => {
@@ -44,9 +55,11 @@ describe('ProfileView', () => {
     vi.mocked(fetchUserProfile).mockReset()
     vi.mocked(updateUserProfile).mockReset()
     vi.mocked(logout).mockReset()
+    vi.mocked(fetchUnreadNotificationCount).mockReset()
     vi.mocked(fetchUserProfile).mockResolvedValue(profile)
     vi.mocked(updateUserProfile).mockResolvedValue(profile)
     vi.mocked(logout).mockResolvedValue(undefined)
+    vi.mocked(fetchUnreadNotificationCount).mockResolvedValue(0)
   })
 
   it('loads and renders current user profile', async () => {
@@ -62,6 +75,8 @@ describe('ProfileView', () => {
     expect(wrapper.text()).toContain('普通用户')
     expect(wrapper.text()).toContain('2026-07-18 10:00')
     expect(wrapper.text()).toContain('2026-07-18 12:00')
+    expect(wrapper.text()).toContain('邮箱通知')
+    expect(wrapper.text()).toContain('未开启')
     expect(wrapper.find('#profileNickname').exists()).toBe(true)
     expect(wrapper.findAll('.profile-avatar-option')).toHaveLength(8)
   })
@@ -93,7 +108,7 @@ describe('ProfileView', () => {
     await flushPromises()
 
     await wrapper.find('.account-trigger').trigger('click')
-    await wrapper.findAll('.account-menu button')[2].trigger('click')
+    await wrapper.findAll('.account-menu button')[3].trigger('click')
     await flushPromises()
 
     expect(logout).toHaveBeenCalledOnce()
@@ -117,6 +132,8 @@ describe('ProfileView', () => {
     expect(updateUserProfile).toHaveBeenCalledWith({
       nickname: '新昵称',
       avatarUrl: '/avatars/avatar-02.svg',
+      emailNotificationEnabled: false,
+      notificationEmail: null,
     })
     expect(wrapper.text()).toContain('个人资料已保存')
     expect(wrapper.find('.account-trigger').text()).toContain('新昵称')
@@ -134,6 +151,34 @@ describe('ProfileView', () => {
     expect((wrapper.find('#profileNickname').element as HTMLInputElement).value).toBe('本地普通用户')
     expect(wrapper.findAll('.profile-avatar-option')[2].classes()).not.toContain('selected')
     expect(updateUserProfile).not.toHaveBeenCalled()
+  })
+
+  it('requires notification email when enabling email notification without existing email', async () => {
+    vi.mocked(fetchUserProfile).mockResolvedValue(profileWithoutEmail)
+    vi.mocked(updateUserProfile).mockResolvedValue({
+      ...profile,
+      maskedEmail: 'n****w@example.com',
+      emailNotificationEnabled: true,
+    })
+    const wrapper = mount(ProfileView)
+    await flushPromises()
+
+    await wrapper.find('.profile-toggle input').setValue(true)
+
+    expect(wrapper.find('#notificationEmail').exists()).toBe(true)
+
+    await wrapper.find('#notificationEmail').setValue('new@example.com')
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(updateUserProfile).toHaveBeenCalledWith({
+      nickname: '本地普通用户',
+      avatarUrl: null,
+      emailNotificationEnabled: true,
+      notificationEmail: 'new@example.com',
+    })
+    expect(wrapper.text()).toContain('个人资料已保存')
+    expect(wrapper.text()).toContain('已开启')
   })
 
   it('shows backend message when saving profile fails', async () => {

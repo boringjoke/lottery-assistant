@@ -4,12 +4,13 @@ import { RouterLink } from 'vue-router'
 import UserAccountMenu from '@/components/UserAccountMenu.vue'
 import type { CurrentUser } from '@/types/auth'
 
-type ProfileNavKey = 'profile' | 'favorites'
+type ProfileNavKey = 'profile' | 'favorites' | 'notifications'
 
 defineProps<{
   currentUser: CurrentUser | null
   loading?: boolean
   activeNav: ProfileNavKey
+  notificationUnreadCount?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -19,6 +20,7 @@ const emit = defineEmits<{
 const navItems: Array<{ key: ProfileNavKey, label: string, to: string }> = [
   { key: 'profile', label: '个人资料', to: '/profile' },
   { key: 'favorites', label: '我的收藏', to: '/profile/favorites' },
+  { key: 'notifications', label: '我的通知', to: '/profile/notifications' },
 ]
 
 function handleLogout() {
@@ -33,7 +35,12 @@ function handleLogout() {
         <span class="profile-shell-brand__mark">≋</span>
         <span>彩票助手</span>
       </RouterLink>
-      <UserAccountMenu :user="currentUser" :loading="loading" @logout="handleLogout" />
+      <UserAccountMenu
+        :user="currentUser"
+        :loading="loading"
+        :notification-unread-count="notificationUnreadCount"
+        @logout="handleLogout"
+      />
     </header>
 
     <div class="profile-shell-layout">

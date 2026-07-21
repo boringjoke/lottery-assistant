@@ -10,6 +10,7 @@ import {
   fetchFavoritePage,
   updateFavorite,
 } from '@/api/favorites'
+import { fetchUnreadNotificationCount } from '@/api/notifications'
 import { fetchUserProfile } from '@/api/user'
 import FavoritesView from '../FavoritesView.vue'
 
@@ -41,6 +42,10 @@ vi.mock('@/api/favorites', () => ({
   deleteFavorite: vi.fn(),
 }))
 
+vi.mock('@/api/notifications', () => ({
+  fetchUnreadNotificationCount: vi.fn(),
+}))
+
 const profile = {
   userId: 10,
   nickname: '本地普通用户',
@@ -50,6 +55,7 @@ const profile = {
   username: 'normal',
   maskedPhone: '138****8000',
   maskedEmail: 'n****l@example.com',
+  emailNotificationEnabled: false,
   createTime: '2026-07-18T10:00:00',
   lastLoginTime: '2026-07-18T12:00:00',
 }
@@ -112,6 +118,7 @@ describe('FavoritesView', () => {
     vi.mocked(activateFavorite).mockReset()
     vi.mocked(deleteFavorite).mockReset()
     vi.mocked(logout).mockReset()
+    vi.mocked(fetchUnreadNotificationCount).mockReset()
     vi.mocked(fetchUserProfile).mockResolvedValue(profile)
     mockFavoritePage()
     vi.mocked(fetchFavoriteDrawHistory).mockResolvedValue({
@@ -132,6 +139,7 @@ describe('FavoritesView', () => {
     vi.mocked(activateFavorite).mockResolvedValue({ ...cancelledFavorite, status: 'ACTIVE' })
     vi.mocked(deleteFavorite).mockResolvedValue(undefined)
     vi.mocked(logout).mockResolvedValue(undefined)
+    vi.mocked(fetchUnreadNotificationCount).mockResolvedValue(0)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
   })
 

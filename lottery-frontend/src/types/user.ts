@@ -7,6 +7,7 @@ export interface UserProfile {
   username: string | null
   maskedPhone: string | null
   maskedEmail: string | null
+  emailNotificationEnabled: boolean
   createTime: string | null
   lastLoginTime: string | null
 }
@@ -14,4 +15,6 @@ export interface UserProfile {
 export interface UserProfileUpdateRequest {
   nickname: string
   avatarUrl: string | null
+  emailNotificationEnabled: boolean
+  notificationEmail: string | null
 }
