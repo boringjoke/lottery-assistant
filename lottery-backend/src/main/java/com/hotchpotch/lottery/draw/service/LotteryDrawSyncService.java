@@ -1041,7 +1041,7 @@ public class LotteryDrawSyncService {
     }
 
     /**
-     * 开奖入库后生成收藏中奖站内通知；失败不影响开奖同步主链路。
+     * 开奖入库后生成收藏中奖通知；失败不影响开奖同步主链路。
      */
     private void generateFavoriteWinningNotifications(LotteryDraw savedDraw) {
         if (favoriteWinningNotificationService == null) {
@@ -1052,7 +1052,7 @@ public class LotteryDrawSyncService {
             favoriteWinningNotificationService.generateForDraw(savedDraw);
         } catch (RuntimeException ex) {
             log.warn(
-                    "收藏中奖站内通知生成失败: lotteryType={}, issueNo={}",
+                    "收藏中奖通知生成失败: lotteryType={}, issueNo={}",
                     savedDraw.getLotteryType(),
                     savedDraw.getIssueNo(),
                     ex);

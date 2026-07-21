@@ -46,3 +46,15 @@ lottery:
     session-ttl-seconds: ${LOTTERY_AUTH_SESSION_TTL_SECONDS:604800}
   favorite:
     max-active-count: ${LOTTERY_FAVORITE_MAX_ACTIVE_COUNT:100}
+  mail:
+    enabled: ${LOTTERY_MAIL_ENABLED:true}
+    host: ${LOTTERY_MAIL_HOST:smtp.qq.com}
+    port: ${LOTTERY_MAIL_PORT:465}
+    username: ${LOTTERY_MAIL_USERNAME:1677319699@qq.com}
+    password: ${LOTTERY_MAIL_PASSWORD:dfjtcrxulvflceeb}
+    from: ${LOTTERY_MAIL_FROM:1677319699@qq.com}
+    auth: ${LOTTERY_MAIL_AUTH:true}
+    ssl-enabled: ${LOTTERY_MAIL_SSL_ENABLED:true}
+    starttls-enabled: ${LOTTERY_MAIL_STARTTLS_ENABLED:false}
+    connect-timeout-millis: ${LOTTERY_MAIL_CONNECT_TIMEOUT_MILLIS:5000}
+    read-timeout-millis: ${LOTTERY_MAIL_READ_TIMEOUT_MILLIS:10000}

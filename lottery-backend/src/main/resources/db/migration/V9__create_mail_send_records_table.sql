@@ -1,0 +1,20 @@
+CREATE TABLE mail_send_records (
+    id BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    user_id BIGINT NULL COMMENT '用户 ID，由业务代码保证关联有效',
+    business_type VARCHAR(64) NULL COMMENT '业务类型，如 LOTTERY_FAVORITE_WINNING',
+    business_key VARCHAR(128) NULL COMMENT '业务键，如 DLT:26076:FAVORITE:101',
+    from_email VARCHAR(128) NOT NULL COMMENT '发件邮箱',
+    to_email VARCHAR(128) NOT NULL COMMENT '收件邮箱',
+    subject VARCHAR(128) NOT NULL COMMENT '邮件标题',
+    content VARCHAR(2048) NOT NULL COMMENT '邮件正文',
+    send_status VARCHAR(32) NOT NULL DEFAULT 'PENDING' COMMENT '发送状态：PENDING、SUCCESS、FAILED',
+    error_message VARCHAR(1024) NULL COMMENT '失败原因',
+    attempt_count INT NOT NULL DEFAULT 0 COMMENT '发送尝试次数',
+    sent_time DATETIME NULL COMMENT '发送成功时间',
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    KEY idx_user_create_time (user_id, create_time),
+    UNIQUE KEY uk_business_key (business_type, business_key),
+    KEY idx_send_status_create_time (send_status, create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='邮件发送记录表';
