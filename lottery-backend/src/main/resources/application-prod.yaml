@@ -1,0 +1,37 @@
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${LOTTERY_DB_URL}
+    username: ${LOTTERY_DB_USERNAME}
+    password: ${LOTTERY_DB_PASSWORD}
+  data:
+    redis:
+      host: ${LOTTERY_REDIS_HOST}
+      port: ${LOTTERY_REDIS_PORT:6379}
+      password: ${LOTTERY_REDIS_PASSWORD:}
+      database: ${LOTTERY_REDIS_DATABASE:1}
+      timeout: ${LOTTERY_REDIS_TIMEOUT:3s}
+      connect-timeout: ${LOTTERY_REDIS_CONNECT_TIMEOUT:3s}
+
+lottery:
+  crawler:
+    base-url: ${LOTTERY_CRAWLER_BASE_URL}
+    connect-timeout-millis: ${LOTTERY_CRAWLER_CONNECT_TIMEOUT_MILLIS:3000}
+    read-timeout-millis: ${LOTTERY_CRAWLER_READ_TIMEOUT_MILLIS:10000}
+  sync:
+    auto-latest:
+      enabled: ${LOTTERY_SYNC_AUTO_LATEST_ENABLED:false}
+      cron: ${LOTTERY_SYNC_AUTO_LATEST_CRON:0 30 21 * * *}
+      zone: ${LOTTERY_SYNC_AUTO_LATEST_ZONE:Asia/Shanghai}
+  mail:
+    enabled: ${LOTTERY_MAIL_ENABLED:false}
+    host: ${LOTTERY_MAIL_HOST:}
+    port: ${LOTTERY_MAIL_PORT:465}
+    username: ${LOTTERY_MAIL_USERNAME:}
+    password: ${LOTTERY_MAIL_PASSWORD:}
+    from: ${LOTTERY_MAIL_FROM:}
+    auth: ${LOTTERY_MAIL_AUTH:true}
+    ssl-enabled: ${LOTTERY_MAIL_SSL_ENABLED:true}
+    starttls-enabled: ${LOTTERY_MAIL_STARTTLS_ENABLED:false}
+    connect-timeout-millis: ${LOTTERY_MAIL_CONNECT_TIMEOUT_MILLIS:5000}
+    read-timeout-millis: ${LOTTERY_MAIL_READ_TIMEOUT_MILLIS:10000}

@@ -12,7 +12,7 @@ class ApplicationYamlTest {
 
     @Test
     void localRedisDefaultsToLoopbackWithShortTimeout() {
-        String yaml = readResource("application.yaml");
+        String yaml = readResource("application-dev.yaml");
 
         assertThat(yaml).contains("host: ${LOTTERY_REDIS_HOST:127.0.0.1}");
         assertThat(yaml).contains("timeout: ${LOTTERY_REDIS_TIMEOUT:3s}");
@@ -28,13 +28,27 @@ class ApplicationYamlTest {
     }
 
     @Test
-    void autoLatestSyncDefaultsToEnabledAndSupportsCronOverride() {
-        String yaml = readResource("application.yaml");
+    void autoLatestSyncDefaultsToDisabledAndSupportsCronOverride() {
+        String devYaml = readResource("application-dev.yaml");
+        String prodYaml = readResource("application-prod.yaml");
 
-        assertThat(yaml).contains("auto-latest:");
-        assertThat(yaml).contains("enabled: ${LOTTERY_SYNC_AUTO_LATEST_ENABLED:true}");
-        assertThat(yaml).contains("cron: ${LOTTERY_SYNC_AUTO_LATEST_CRON:");
-        assertThat(yaml).contains("zone: ${LOTTERY_SYNC_AUTO_LATEST_ZONE:Asia/Shanghai}");
+        assertThat(devYaml).contains("auto-latest:");
+        assertThat(devYaml).contains("enabled: ${LOTTERY_SYNC_AUTO_LATEST_ENABLED:false}");
+        assertThat(devYaml).contains("cron: ${LOTTERY_SYNC_AUTO_LATEST_CRON:");
+        assertThat(devYaml).contains("zone: ${LOTTERY_SYNC_AUTO_LATEST_ZONE:Asia/Shanghai}");
+        assertThat(prodYaml).contains("enabled: ${LOTTERY_SYNC_AUTO_LATEST_ENABLED:false}");
+    }
+
+    @Test
+    void defaultProfileIsDevAndProdKeepsRequiredEnvironmentPlaceholders() {
+        String commonYaml = readResource("application.yaml");
+        String prodYaml = readResource("application-prod.yaml");
+
+        assertThat(commonYaml).contains("active: ${SPRING_PROFILES_ACTIVE:dev}");
+        assertThat(prodYaml).contains("url: ${LOTTERY_DB_URL}");
+        assertThat(prodYaml).contains("username: ${LOTTERY_DB_USERNAME}");
+        assertThat(prodYaml).contains("password: ${LOTTERY_DB_PASSWORD}");
+        assertThat(prodYaml).contains("base-url: ${LOTTERY_CRAWLER_BASE_URL}");
     }
 
     private String readResource(String resourcePath) {
