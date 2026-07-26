@@ -15,6 +15,7 @@ import java.util.List;
  * @param backNumbers 收藏后区号码
  * @param displayText 收藏号码展示文本
  * @param latestDrawResult 最近一期实时分析结果
+ * @param winningSummary 中奖历史摘要
  * @param results 当前页实时分析结果
  */
 public record LotteryFavoriteDrawHistoryPageResponse(
@@ -28,5 +29,33 @@ public record LotteryFavoriteDrawHistoryPageResponse(
         String backNumbers,
         String displayText,
         LotteryFavoriteDrawHistoryItemResponse latestDrawResult,
+        LotteryFavoriteWinningSummaryResponse winningSummary,
         List<LotteryFavoriteDrawHistoryItemResponse> results) {
+
+    public LotteryFavoriteDrawHistoryPageResponse(
+            int pageNo,
+            int pageSize,
+            long total,
+            int pages,
+            Long favoriteId,
+            String lotteryType,
+            String frontNumbers,
+            String backNumbers,
+            String displayText,
+            LotteryFavoriteDrawHistoryItemResponse latestDrawResult,
+            List<LotteryFavoriteDrawHistoryItemResponse> results) {
+        this(
+                pageNo,
+                pageSize,
+                total,
+                pages,
+                favoriteId,
+                lotteryType,
+                frontNumbers,
+                backNumbers,
+                displayText,
+                latestDrawResult,
+                null,
+                results);
+    }
 }

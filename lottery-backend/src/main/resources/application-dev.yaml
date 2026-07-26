@@ -21,8 +21,12 @@ lottery:
   sync:
     auto-latest:
       enabled: ${LOTTERY_SYNC_AUTO_LATEST_ENABLED:false}
-      cron: ${LOTTERY_SYNC_AUTO_LATEST_CRON:0 30 21 * * *}
+      cron: ${LOTTERY_SYNC_AUTO_LATEST_CRON:0 45 21 * * MON,WED,SAT}
       zone: ${LOTTERY_SYNC_AUTO_LATEST_ZONE:Asia/Shanghai}
+    latest-completion:
+      enabled: ${LOTTERY_SYNC_LATEST_COMPLETION_ENABLED:false}
+      cron: ${LOTTERY_SYNC_LATEST_COMPLETION_CRON:0 0 8 ? * TUE,THU,SUN}
+      zone: ${LOTTERY_SYNC_LATEST_COMPLETION_ZONE:Asia/Shanghai}
   mail:
     enabled: ${LOTTERY_MAIL_ENABLED:false}
     host: ${LOTTERY_MAIL_HOST:}

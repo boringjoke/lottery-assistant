@@ -26,13 +26,11 @@ import com.hotchpotch.lottery.notification.service.LotteryFavoriteWinningNotific
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -990,15 +988,22 @@ public class LotteryDrawSyncService {
     }
 
     /**
-     * 同步单期开奖数据；已存在返回 false，新入库返回 true。
+     * 同步单期开奖数据；新入库或补齐已有数据返回 true，无变化返回 false。
      */
     private boolean syncOneDraw(CrawlerDraw draw) {
         return drawRepository.findByLotteryTypeAndIssueNo(draw.lotteryType(), draw.issueNo())
-                .map(existingDraw -> {
-                    fillMissingPrizeTiers(draw, existingDraw.getId());
-                    return false;
-                })
+                .map(existingDraw -> syncExistingDraw(draw, existingDraw))
                 .orElseGet(() -> insertNewDrawAndGenerateFavoriteResults(draw));
+    }
+
+    /**
+     * 为已存在的开奖补齐 crawler 后续才返回的主表字段和奖级明细。
+     */
+    private boolean syncExistingDraw(CrawlerDraw crawlerDraw, LotteryDraw existingDraw) {
+        boolean drawUpdated = fillMissingDrawFields(crawlerDraw, existingDraw);
+        boolean prizeTiersUpdated = fillMissingPrizeTiers(crawlerDraw, existingDraw.getId());
+
+        return drawUpdated || prizeTiersUpdated;
     }
 
     /**
@@ -1060,26 +1065,113 @@ public class LotteryDrawSyncService {
     }
 
     /**
-     * 为已存在的开奖补齐缺失的奖级明细，修复历史同步中断后的半成品数据。
+     * 为已存在的开奖补齐 crawler 后续才返回的主表字段。
      */
-    private void fillMissingPrizeTiers(CrawlerDraw crawlerDraw, Long drawId) {
-        if (drawId == null || crawlerDraw.prizeTiers() == null || crawlerDraw.prizeTiers().isEmpty()) {
-            return;
+    private boolean fillMissingDrawFields(CrawlerDraw crawlerDraw, LotteryDraw existingDraw) {
+        boolean changed = false;
+        String frontNumbers = formatNumbers(crawlerDraw.frontNumbers());
+        String backNumbers = formatNumbers(crawlerDraw.backNumbers());
+
+        if (existingDraw.getDrawDate() == null && crawlerDraw.drawDate() != null) {
+            existingDraw.setDrawDate(crawlerDraw.drawDate());
+            changed = true;
+        }
+        if (isBlank(existingDraw.getFrontNumbers()) && !frontNumbers.isBlank()) {
+            existingDraw.setFrontNumbers(frontNumbers);
+            changed = true;
+        }
+        if (isBlank(existingDraw.getBackNumbers()) && !backNumbers.isBlank()) {
+            existingDraw.setBackNumbers(backNumbers);
+            changed = true;
+        }
+        if (existingDraw.getPoolBalance() == null && crawlerDraw.poolBalance() != null) {
+            existingDraw.setPoolBalance(crawlerDraw.poolBalance());
+            changed = true;
+        }
+        if (existingDraw.getSalesAmount() == null && crawlerDraw.salesAmount() != null) {
+            existingDraw.setSalesAmount(crawlerDraw.salesAmount());
+            changed = true;
+        }
+        if (isBlank(existingDraw.getSourceUrl()) && !isBlank(crawlerDraw.source())) {
+            existingDraw.setSourceUrl(crawlerDraw.source());
+            changed = true;
+        }
+        if (isBlank(existingDraw.getPdfUrl()) && !isBlank(crawlerDraw.pdfUrl())) {
+            existingDraw.setPdfUrl(crawlerDraw.pdfUrl());
+            changed = true;
         }
 
-        Set<String> existingPrizeNames = prizeTierRepository.findByDrawId(drawId)
-                .stream()
-                .map(LotteryPrizeTier::getPrizeName)
-                .collect(Collectors.toCollection(HashSet::new));
+        if (changed) {
+            existingDraw.setFetchedTime(LocalDateTime.now());
+            drawRepository.updateById(existingDraw);
+        }
+
+        return changed;
+    }
+
+    /**
+     * 为已存在的开奖补齐缺失的奖级明细和奖级字段。
+     */
+    private boolean fillMissingPrizeTiers(CrawlerDraw crawlerDraw, Long drawId) {
+        if (drawId == null || crawlerDraw.prizeTiers() == null || crawlerDraw.prizeTiers().isEmpty()) {
+            return false;
+        }
+
+        Map<String, LotteryPrizeTier> existingPrizeTiers = new LinkedHashMap<>();
+        for (LotteryPrizeTier prizeTier : prizeTierRepository.findByDrawId(drawId)) {
+            if (!isBlank(prizeTier.getPrizeName())) {
+                existingPrizeTiers.putIfAbsent(prizeTier.getPrizeName(), prizeTier);
+            }
+        }
         List<CrawlerPrizeTierResponse> missingPrizeTiers = crawlerDraw.prizeTiers().stream()
-                .filter(prizeTier -> !existingPrizeNames.contains(prizeTier.name()))
+                .filter(prizeTier -> !existingPrizeTiers.containsKey(prizeTier.name()))
                 .toList();
+        int updatedCount = 0;
+        for (CrawlerPrizeTierResponse crawlerPrizeTier : crawlerDraw.prizeTiers()) {
+            LotteryPrizeTier existingPrizeTier = existingPrizeTiers.get(crawlerPrizeTier.name());
+            if (existingPrizeTier != null && fillMissingPrizeTierFields(existingPrizeTier, crawlerPrizeTier)) {
+                updatedCount += prizeTierRepository.updateById(existingPrizeTier);
+            }
+        }
 
         if (missingPrizeTiers.isEmpty()) {
-            return;
+            return updatedCount > 0;
         }
 
-        prizeTierRepository.insertBatch(toPrizeTierEntities(crawlerDraw, drawId, missingPrizeTiers));
+        int insertedCount = prizeTierRepository.insertBatch(toPrizeTierEntities(crawlerDraw, drawId, missingPrizeTiers));
+        return updatedCount > 0 || insertedCount > 0;
+    }
+
+    /**
+     * 用 crawler 新返回的非空字段补齐已有奖级明细。
+     */
+    private boolean fillMissingPrizeTierFields(
+            LotteryPrizeTier existingPrizeTier,
+            CrawlerPrizeTierResponse crawlerPrizeTier) {
+        boolean changed = false;
+
+        if (existingPrizeTier.getStakeCount() == null && crawlerPrizeTier.stakeCount() != null) {
+            existingPrizeTier.setStakeCount(crawlerPrizeTier.stakeCount());
+            changed = true;
+        }
+        if (existingPrizeTier.getStakeAmount() == null && crawlerPrizeTier.stakeAmount() != null) {
+            existingPrizeTier.setStakeAmount(crawlerPrizeTier.stakeAmount());
+            changed = true;
+        }
+        if (existingPrizeTier.getTotalPrizeAmount() == null && crawlerPrizeTier.totalPrizeAmount() != null) {
+            existingPrizeTier.setTotalPrizeAmount(crawlerPrizeTier.totalPrizeAmount());
+            changed = true;
+        }
+        if (existingPrizeTier.getSortOrder() == null && crawlerPrizeTier.sort() != null) {
+            existingPrizeTier.setSortOrder(crawlerPrizeTier.sort());
+            changed = true;
+        }
+        if (isBlank(existingPrizeTier.getPrizeGroup()) && !isBlank(crawlerPrizeTier.group())) {
+            existingPrizeTier.setPrizeGroup(crawlerPrizeTier.group());
+            changed = true;
+        }
+
+        return changed;
     }
 
     /**
@@ -1154,6 +1246,13 @@ public class LotteryDrawSyncService {
         return numbers.stream()
                 .map(number -> String.format("%02d", number))
                 .collect(Collectors.joining(","));
+    }
+
+    /**
+     * 判断文本是否为空白。
+     */
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     /**

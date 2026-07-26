@@ -10,6 +10,7 @@ import com.hotchpotch.lottery.draw.service.LotteryDltNumberService;
 import com.hotchpotch.lottery.favorite.entity.LotteryNumberFavorite;
 import com.hotchpotch.lottery.favorite.enums.LotteryNumberFavoriteStatus;
 import com.hotchpotch.lottery.favorite.record.LotteryFavoriteDrawHistoryItemResponse;
+import com.hotchpotch.lottery.favorite.record.LotteryFavoriteWinningSummaryResponse;
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoriteCreateRequest;
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoritePageResponse;
 import com.hotchpotch.lottery.favorite.record.LotteryNumberFavoriteResponse;
@@ -377,7 +378,8 @@ public class LotteryNumberFavoriteService {
                 favorite.getFavoriteTime(),
                 favorite.getEffectiveTime(),
                 favorite.getCancelTime(),
-                latestDrawResult(favorite));
+                latestDrawResult(favorite),
+                winningSummary(favorite));
     }
 
     /**
@@ -389,6 +391,17 @@ public class LotteryNumberFavoriteService {
         }
 
         return favoriteAnalyzeService.latestDrawResult(favorite);
+    }
+
+    /**
+     * 获取收藏号码中奖历史摘要；单元测试可不注入该服务。
+     */
+    private LotteryFavoriteWinningSummaryResponse winningSummary(LotteryNumberFavorite favorite) {
+        if (favoriteAnalyzeService == null) {
+            return null;
+        }
+
+        return favoriteAnalyzeService.winningSummary(favorite);
     }
 
     /**

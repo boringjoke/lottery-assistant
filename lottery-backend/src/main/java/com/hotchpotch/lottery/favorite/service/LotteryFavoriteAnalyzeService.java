@@ -13,9 +13,13 @@ import com.hotchpotch.lottery.draw.service.LotteryDltPrizeRuleService;
 import com.hotchpotch.lottery.favorite.entity.LotteryNumberFavorite;
 import com.hotchpotch.lottery.favorite.record.LotteryFavoriteDrawHistoryItemResponse;
 import com.hotchpotch.lottery.favorite.record.LotteryFavoriteDrawHistoryPageResponse;
+import com.hotchpotch.lottery.favorite.record.LotteryFavoritePrizeCountResponse;
+import com.hotchpotch.lottery.favorite.record.LotteryFavoriteWinningSummaryResponse;
 import com.hotchpotch.lottery.favorite.repository.LotteryNumberFavoriteRepository;
+import java.util.LinkedHashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 
@@ -75,7 +79,30 @@ public class LotteryFavoriteAnalyzeService {
                 favorite.getBackNumbers(),
                 displayText(favorite),
                 latestDrawResult(favorite),
+                summarizeWinningResults(winningResults),
                 results);
+    }
+
+    /**
+     * 统计收藏号码的历史中奖摘要。
+     */
+    public LotteryFavoriteWinningSummaryResponse winningSummary(LotteryNumberFavorite favorite) {
+        if (favorite == null || favorite.getLotteryType() == null) {
+            return emptyWinningSummary();
+        }
+        if (!LotteryType.DLT.code().equals(favorite.getLotteryType())) {
+            return emptyWinningSummary();
+        }
+
+        LotteryDltNumber favoriteNumber = parseFavoriteNumber(favorite);
+        List<LotteryFavoriteDrawHistoryItemResponse> winningResults = drawRepository
+                .findAllByLotteryType(favorite.getLotteryType())
+                .stream()
+                .map(draw -> analyzeDraw(favoriteNumber, draw))
+                .filter(LotteryFavoriteDrawHistoryItemResponse::winning)
+                .toList();
+
+        return summarizeWinningResults(winningResults);
     }
 
     /**
@@ -182,7 +209,115 @@ public class LotteryFavoriteAnalyzeService {
         return results.subList(fromIndex, toIndex);
     }
 
+    /**
+     * 根据完整中奖结果统计历史最高奖项和各奖级命中次数。
+     */
+    private LotteryFavoriteWinningSummaryResponse summarizeWinningResults(
+            List<LotteryFavoriteDrawHistoryItemResponse> winningResults) {
+        if (winningResults == null || winningResults.isEmpty()) {
+            return emptyWinningSummary();
+        }
+
+        LotteryFavoriteDrawHistoryItemResponse bestResult = null;
+        Map<Integer, PrizeCountAccumulator> prizeCountMap = new LinkedHashMap<>();
+        for (LotteryFavoriteDrawHistoryItemResponse result : winningResults) {
+            if (!result.winning() || result.prizeLevel() == null) {
+                continue;
+            }
+
+            prizeCountMap.computeIfAbsent(
+                    result.prizeLevel(),
+                    prizeLevel -> new PrizeCountAccumulator(prizeLevel, result.prizeName()))
+                    .increase();
+            if (isBetterWinningResult(result, bestResult)) {
+                bestResult = result;
+            }
+        }
+
+        if (bestResult == null) {
+            return emptyWinningSummary();
+        }
+
+        List<LotteryFavoritePrizeCountResponse> prizeCounts = prizeCountMap.values()
+                .stream()
+                .sorted((left, right) -> Integer.compare(left.prizeLevel(), right.prizeLevel()))
+                .map(PrizeCountAccumulator::toResponse)
+                .toList();
+
+        return new LotteryFavoriteWinningSummaryResponse(
+                true,
+                winningResults.size(),
+                bestResult.prizeLevel(),
+                bestResult.prizeName(),
+                bestResult.issueNo(),
+                bestResult.drawDate(),
+                prizeCounts);
+    }
+
+    /**
+     * 判断候选结果是否优于当前历史最佳；同奖级时保留最新一期。
+     */
+    private boolean isBetterWinningResult(
+            LotteryFavoriteDrawHistoryItemResponse candidate,
+            LotteryFavoriteDrawHistoryItemResponse currentBest) {
+        if (candidate == null || candidate.prizeLevel() == null) {
+            return false;
+        }
+        if (currentBest == null || currentBest.prizeLevel() == null) {
+            return true;
+        }
+        if (!candidate.prizeLevel().equals(currentBest.prizeLevel())) {
+            return candidate.prizeLevel() < currentBest.prizeLevel();
+        }
+        if (candidate.drawDate() != null && currentBest.drawDate() != null
+                && !candidate.drawDate().equals(currentBest.drawDate())) {
+            return candidate.drawDate().isAfter(currentBest.drawDate());
+        }
+        if (candidate.issueNo() == null || currentBest.issueNo() == null) {
+            return false;
+        }
+
+        return candidate.issueNo().compareTo(currentBest.issueNo()) > 0;
+    }
+
+    /**
+     * 构造无中奖历史的空摘要。
+     */
+    private LotteryFavoriteWinningSummaryResponse emptyWinningSummary() {
+        return new LotteryFavoriteWinningSummaryResponse(false, 0, null, null, null, null, List.of());
+    }
+
     private BusinessException favoriteNotFound() {
         return new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "收藏号码不存在");
+    }
+
+    /**
+     * 奖级命中次数累加器。
+     */
+    private static final class PrizeCountAccumulator {
+
+        private final Integer prizeLevel;
+        private final String prizeName;
+        private long count;
+
+        /**
+         * 初始化奖级统计项。
+         */
+        private PrizeCountAccumulator(Integer prizeLevel, String prizeName) {
+            this.prizeLevel = prizeLevel;
+            this.prizeName = prizeName;
+        }
+
+        private Integer prizeLevel() {
+            return prizeLevel;
+        }
+
+        private void increase() {
+            count++;
+        }
+
+        private LotteryFavoritePrizeCountResponse toResponse() {
+            return new LotteryFavoritePrizeCountResponse(prizeLevel, prizeName, count);
+        }
     }
 }

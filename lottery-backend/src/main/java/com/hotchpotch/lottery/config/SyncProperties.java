@@ -43,6 +43,11 @@ public class SyncProperties {
      */
     private AutoLatest autoLatest = new AutoLatest();
 
+    /**
+     * 最新开奖数据补全配置。
+     */
+    private LatestCompletion latestCompletion = new LatestCompletion();
+
     public int corePoolSize() {
         return corePoolSize;
     }
@@ -99,6 +104,14 @@ public class SyncProperties {
         this.autoLatest = autoLatest;
     }
 
+    public LatestCompletion latestCompletion() {
+        return latestCompletion;
+    }
+
+    public void setLatestCompletion(LatestCompletion latestCompletion) {
+        this.latestCompletion = latestCompletion;
+    }
+
     /**
      * 最新开奖自动同步配置，默认关闭，避免本地启动后自动请求 crawler。
      */
@@ -141,6 +154,19 @@ public class SyncProperties {
 
         public void setZone(String zone) {
             this.zone = zone;
+        }
+    }
+
+    /**
+     * 最新开奖补全任务配置，默认在开奖次日上午执行。
+     */
+    public static class LatestCompletion extends AutoLatest {
+
+        /**
+         * 初始化补全任务默认 cron。
+         */
+        public LatestCompletion() {
+            setCron("0 0 8 ? * TUE,THU,SUN");
         }
     }
 }

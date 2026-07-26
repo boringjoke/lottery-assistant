@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
  * @param effectiveTime 当前生效时间
  * @param cancelTime 取消收藏时间
  * @param latestDrawResult 最近一期开奖实时分析结果
+ * @param winningSummary 中奖历史摘要
  */
 public record LotteryNumberFavoriteResponse(
         Long id,
@@ -30,5 +31,35 @@ public record LotteryNumberFavoriteResponse(
         LocalDateTime favoriteTime,
         LocalDateTime effectiveTime,
         LocalDateTime cancelTime,
-        LotteryFavoriteDrawHistoryItemResponse latestDrawResult) {
+        LotteryFavoriteDrawHistoryItemResponse latestDrawResult,
+        LotteryFavoriteWinningSummaryResponse winningSummary) {
+
+    public LotteryNumberFavoriteResponse(
+            Long id,
+            String lotteryType,
+            String frontNumbers,
+            String backNumbers,
+            String displayText,
+            String favoriteName,
+            String remark,
+            String status,
+            LocalDateTime favoriteTime,
+            LocalDateTime effectiveTime,
+            LocalDateTime cancelTime,
+            LotteryFavoriteDrawHistoryItemResponse latestDrawResult) {
+        this(
+                id,
+                lotteryType,
+                frontNumbers,
+                backNumbers,
+                displayText,
+                favoriteName,
+                remark,
+                status,
+                favoriteTime,
+                effectiveTime,
+                cancelTime,
+                latestDrawResult,
+                null);
+    }
 }

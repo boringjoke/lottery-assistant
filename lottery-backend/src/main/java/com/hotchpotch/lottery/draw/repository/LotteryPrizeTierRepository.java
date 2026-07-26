@@ -41,4 +41,11 @@ public class LotteryPrizeTierRepository {
 
         return insertedCount;
     }
+
+    /**
+     * 按主键更新奖级明细。
+     */
+    public int updateById(LotteryPrizeTier prizeTier) {
+        return lotteryPrizeTierMapper.updateById(prizeTier);
+    }
 }

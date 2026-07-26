@@ -50,6 +50,28 @@ public class LotteryAutoSyncScheduler {
     }
 
     /**
+     * 按配置的 cron 补全最新开奖滞后字段；默认关闭，避免本地启动后自动请求 crawler。
+     */
+    @Scheduled(cron = "${lottery.sync.latest-completion.cron}", zone = "${lottery.sync.latest-completion.zone}")
+    public void completeLatestDraw() {
+        if (!syncProperties.latestCompletion().enabled()) {
+            return;
+        }
+
+        try {
+            syncService.syncLatestDraw(LotterySyncTriggerSource.SCHEDULED.code());
+        } catch (BusinessException ex) {
+            if (isActiveTaskConflict(ex)) {
+                log.info("自动补全最新开奖跳过: {}", ex.getMessage());
+                return;
+            }
+            log.warn("自动补全最新开奖执行失败: {}", ex.getMessage(), ex);
+        } catch (RuntimeException ex) {
+            log.warn("自动补全最新开奖执行失败: {}", ex.getMessage(), ex);
+        }
+    }
+
+    /**
      * 已有活跃同步任务时不重复创建自动任务，交给下一次 cron 再尝试。
      */
     private boolean isActiveTaskConflict(BusinessException ex) {
