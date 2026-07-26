@@ -11,10 +11,6 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      redirect: '/lottery-assistant?tab=overview',
-    },
-    {
-      path: '/lottery-assistant',
       name: 'lottery-assistant',
       component: LotteryAssistantView,
     },

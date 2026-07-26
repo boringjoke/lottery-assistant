@@ -9,6 +9,7 @@ import ProfileShell from '@/components/profile/ProfileShell.vue'
 import type { CurrentUser } from '@/types/auth'
 import type { UserProfile } from '@/types/user'
 import { getErrorMessage } from '@/utils/lotteryFormat'
+import { resolvePublicPath } from '@/utils/publicPath'
 
 const router = useRouter()
 const profile = ref<UserProfile | null>(null)
@@ -43,6 +44,7 @@ const currentUser = computed<CurrentUser | null>(() => {
 })
 
 const userInitial = computed(() => profile.value?.nickname?.trim().slice(0, 1) || '用')
+const displayAvatarUrl = computed(() => resolvePublicPath(profile.value?.avatarUrl))
 const roleText = computed(() => {
   if (!profile.value?.roles.length) {
     return '-'
@@ -180,7 +182,7 @@ onMounted(loadProfile)
 
             <div class="profile-overview">
               <div class="profile-avatar" aria-hidden="true">
-                <img v-if="profile.avatarUrl" :src="profile.avatarUrl" alt="" />
+                <img v-if="displayAvatarUrl" :src="displayAvatarUrl" alt="" />
                 <span v-else>{{ userInitial }}</span>
               </div>
               <div>
@@ -216,7 +218,7 @@ onMounted(loadProfile)
                     :aria-pressed="avatarDraft === avatarUrl"
                     @click="avatarDraft = avatarUrl"
                   >
-                    <img :src="avatarUrl" alt="" />
+                    <img :src="resolvePublicPath(avatarUrl)" alt="" />
                   </button>
                 </div>
               </fieldset>

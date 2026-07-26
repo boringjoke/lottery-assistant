@@ -31,7 +31,7 @@ function handleLogout() {
 <template>
   <div class="profile-shell">
     <header class="profile-shell-topbar">
-      <RouterLink class="profile-shell-brand" to="/lottery-assistant?tab=overview">
+      <RouterLink class="profile-shell-brand" to="/?tab=overview">
         <span class="profile-shell-brand__mark">≋</span>
         <span>彩票助手</span>
       </RouterLink>

@@ -16,7 +16,7 @@ const errorMessage = ref('')
 
 const returnTarget = computed(() => {
   const redirect = route.query.redirect
-  return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/lottery-assistant?tab=overview'
+  return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/?tab=overview'
 })
 
 /**
@@ -48,7 +48,7 @@ async function submitLogin() {
 <template>
   <div class="login-page">
     <header class="login-topbar">
-      <button class="back-button" type="button" @click="router.push('/lottery-assistant?tab=overview')">
+      <button class="back-button" type="button" @click="router.push('/?tab=overview')">
         <span class="back-button__icon" aria-hidden="true"></span>
         返回彩票助手
       </button>

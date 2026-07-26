@@ -7,7 +7,7 @@ import UserAccountMenu from '@/components/UserAccountMenu.vue'
 const push = vi.fn()
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ fullPath: '/lottery-assistant?tab=overview' }),
+  useRoute: () => ({ fullPath: '/?tab=overview' }),
   useRouter: () => ({ push }),
 }))
 
@@ -36,7 +36,7 @@ describe('UserAccountMenu', () => {
     expect(wrapper.find('.login-entry-button__icon-hover').exists()).toBe(true)
     expect(push).toHaveBeenCalledWith({
       path: '/login',
-      query: { redirect: '/lottery-assistant?tab=overview' },
+      query: { redirect: '/?tab=overview' },
     })
   })
 

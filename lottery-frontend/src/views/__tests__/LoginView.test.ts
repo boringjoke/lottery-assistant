@@ -26,7 +26,7 @@ describe('LoginView', () => {
 
     await wrapper.find('.back-button').trigger('click')
 
-    expect(push).toHaveBeenCalledWith('/lottery-assistant?tab=overview')
+    expect(push).toHaveBeenCalledWith('/?tab=overview')
   })
 
   it('renders static login form with account helper links', () => {
@@ -56,7 +56,7 @@ describe('LoginView', () => {
     await flushPromises()
 
     expect(loginWithPassword).toHaveBeenCalledWith({ account: 'admin', password: 'secret' })
-    expect(push).toHaveBeenCalledWith('/lottery-assistant?tab=overview')
+    expect(push).toHaveBeenCalledWith('/?tab=overview')
   })
 
   it('shows required message when submitting empty form', async () => {

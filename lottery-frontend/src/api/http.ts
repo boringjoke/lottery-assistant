@@ -1,6 +1,7 @@
 import type { ApiResponse } from '@/types/lottery'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? ''
+const APP_BASE_URL = import.meta.env.BASE_URL ?? '/'
 
 export class ApiError extends Error {
   code: string
@@ -25,9 +26,10 @@ interface RequestOptions extends RequestInit {
  * 组装请求地址，并过滤空查询参数，避免把未填写的筛选条件传给后端。
  */
 function buildUrl(path: string, query?: RequestOptions['query']): string {
+  const normalizedPath = normalizePath(path)
   const url = API_BASE_URL
-    ? new URL(path, API_BASE_URL)
-    : new URL(path, window.location.origin)
+    ? new URL(normalizedPath, API_BASE_URL)
+    : new URL(joinBasePath(APP_BASE_URL, normalizedPath), window.location.origin)
 
   Object.entries(query ?? {}).forEach(([key, value]) => {
     if (value !== null && value !== undefined && value !== '') {
@@ -36,6 +38,17 @@ function buildUrl(path: string, query?: RequestOptions['query']): string {
   })
 
   return API_BASE_URL ? url.toString() : `${url.pathname}${url.search}`
+}
+
+function normalizePath(path: string): string {
+  return path.startsWith('/') ? path : `/${path}`
+}
+
+function joinBasePath(basePath: string, path: string): string {
+  const normalizedBase = basePath.endsWith('/') ? basePath : `${basePath}/`
+  const normalizedPath = path.startsWith('/') ? path.slice(1) : path
+
+  return `${normalizedBase}${normalizedPath}`
 }
 
 /**

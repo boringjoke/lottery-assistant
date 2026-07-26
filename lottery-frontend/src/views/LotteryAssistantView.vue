@@ -49,7 +49,7 @@ function normalizeTab(tab: unknown): ActiveTab {
 function changeTab(tab: ActiveTab) {
   activeTab.value = tab
   void router.replace({
-    path: '/lottery-assistant',
+    path: '/',
     query: { ...route.query, tab },
   })
 }

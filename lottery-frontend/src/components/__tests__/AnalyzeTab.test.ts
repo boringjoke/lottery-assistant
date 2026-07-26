@@ -9,7 +9,7 @@ import type { LotteryDltAnalyzeResponse } from '@/types/lottery'
 const push = vi.fn()
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ fullPath: '/lottery-assistant?tab=analyze' }),
+  useRoute: () => ({ fullPath: '/?tab=analyze' }),
   useRouter: () => ({ push }),
 }))
 
@@ -325,7 +325,7 @@ describe('AnalyzeTab', () => {
     expect(createFavorite).not.toHaveBeenCalled()
     expect(push).toHaveBeenCalledWith({
       path: '/login',
-      query: { redirect: '/lottery-assistant?tab=analyze' },
+      query: { redirect: '/?tab=analyze' },
     })
   })
 })

@@ -11,6 +11,7 @@ import notificationIconUrl from '@/assets/icons/notification.svg'
 import profileIconUrl from '@/assets/icons/profile.svg'
 import favoriteIconUrl from '@/assets/icons/favorite.svg'
 import type { CurrentUser } from '@/types/auth'
+import { resolvePublicPath } from '@/utils/publicPath'
 
 const props = defineProps<{
   user: CurrentUser | null
@@ -29,6 +30,7 @@ const unreadCount = ref(0)
 
 const isAdmin = computed(() => props.user?.roles.includes('ADMIN') ?? false)
 const userInitial = computed(() => props.user?.nickname?.trim().slice(0, 1) || '用')
+const displayAvatarUrl = computed(() => resolvePublicPath(props.user?.avatarUrl))
 const unreadCountText = computed(() => unreadCount.value > 99 ? '99+' : String(unreadCount.value))
 
 watch(
@@ -78,7 +80,7 @@ async function loadUnreadCount() {
 function goLogin() {
   void router.push({
     path: '/login',
-    query: { redirect: route.fullPath || '/lottery-assistant?tab=overview' },
+    query: { redirect: route.fullPath || '/?tab=overview' },
   })
 }
 
@@ -134,7 +136,7 @@ function handleLogout() {
         @click="menuOpen = !menuOpen"
       >
         <span class="account-trigger__avatar" aria-hidden="true">
-          <img v-if="user.avatarUrl" :src="user.avatarUrl" alt="" />
+          <img v-if="displayAvatarUrl" :src="displayAvatarUrl" alt="" />
           <span v-else>{{ userInitial }}</span>
         </span>
         <span class="account-trigger__name">{{ user.nickname }}</span>

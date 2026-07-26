@@ -87,7 +87,7 @@ onBeforeUnmount(cleanupNoticeTimer)
 <template>
   <div class="admin-sync-page">
     <header class="admin-topbar">
-      <RouterLink class="admin-brand" to="/lottery-assistant?tab=overview">
+      <RouterLink class="admin-brand" to="/?tab=overview">
         <span class="brand-mark">≋</span>
         <span>彩票助手</span>
       </RouterLink>

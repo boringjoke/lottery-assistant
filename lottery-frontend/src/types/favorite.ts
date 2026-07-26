@@ -13,6 +13,22 @@ export interface FavoriteDrawHistoryItem {
   ruleVersion: string
 }
 
+export interface FavoritePrizeCount {
+  prizeLevel: number | null
+  prizeName: string
+  count: number
+}
+
+export interface FavoriteWinningSummary {
+  winning: boolean
+  totalWinningCount: number
+  bestPrizeLevel: number | null
+  bestPrizeName: string | null
+  bestIssueNo: string | null
+  bestDrawDate: string | null
+  prizeCounts: FavoritePrizeCount[]
+}
+
 export interface LotteryNumberFavorite {
   id: number
   lotteryType: string
@@ -26,6 +42,7 @@ export interface LotteryNumberFavorite {
   effectiveTime: string | null
   cancelTime: string | null
   latestDrawResult: FavoriteDrawHistoryItem | null
+  winningSummary?: FavoriteWinningSummary | null
 }
 
 export interface FavoritePageQuery {
@@ -56,6 +73,7 @@ export interface FavoriteDrawHistoryPage {
   backNumbers: string
   displayText: string
   latestDrawResult: FavoriteDrawHistoryItem | null
+  winningSummary?: FavoriteWinningSummary | null
   results: FavoriteDrawHistoryItem[]
 }
 

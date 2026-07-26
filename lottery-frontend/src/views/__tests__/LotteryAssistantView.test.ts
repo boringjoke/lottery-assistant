@@ -9,7 +9,7 @@ const push = vi.fn()
 const replace = vi.fn()
 
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ query: { tab: 'overview' }, fullPath: '/lottery-assistant?tab=overview' }),
+  useRoute: () => ({ query: { tab: 'overview' }, fullPath: '/?tab=overview' }),
   useRouter: () => ({ push, replace }),
 }))
 
@@ -57,7 +57,7 @@ describe('LotteryAssistantView', () => {
     expect(wrapper.find('.header-actions').text()).toMatch(/票种[\s\S]*大乐透[\s\S]*登录/)
     expect(push).toHaveBeenCalledWith({
       path: '/login',
-      query: { redirect: '/lottery-assistant?tab=overview' },
+      query: { redirect: '/?tab=overview' },
     })
   })
 

@@ -390,7 +390,7 @@ async function favoriteAnalyzeNumber(numberResult: LotteryDltAnalyzeNumberResult
 async function goLoginBeforeFavorite() {
   await router.push({
     path: '/login',
-    query: { redirect: route.fullPath || '/lottery-assistant?tab=analyze' },
+    query: { redirect: route.fullPath || '/?tab=analyze' },
   })
 }
 </script>
