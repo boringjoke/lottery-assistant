@@ -1,0 +1,77 @@
+services:
+  lottery-frontend:
+    image: ${LOTTERY_FRONTEND_IMAGE:?Set LOTTERY_FRONTEND_IMAGE in .env.production}
+    container_name: lottery-frontend
+    restart: unless-stopped
+    environment:
+      TZ: ${LOTTERY_TIME_ZONE:-Asia/Shanghai}
+    expose:
+      - "80"
+    depends_on:
+      lottery-backend:
+        condition: service_started
+    networks:
+      - lottery-network
+      - public-gateway
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  lottery-backend:
+    image: ${LOTTERY_BACKEND_IMAGE:?Set LOTTERY_BACKEND_IMAGE in .env.production}
+    container_name: lottery-backend
+    restart: unless-stopped
+    env_file:
+      - ${LOTTERY_RUNTIME_ENV_FILE:-.env.production}
+    environment:
+      TZ: ${LOTTERY_TIME_ZONE:-Asia/Shanghai}
+      JAVA_TOOL_OPTIONS: "-Duser.timezone=${LOTTERY_TIME_ZONE:-Asia/Shanghai}"
+    expose:
+      - "8080"
+    depends_on:
+      lottery-crawler:
+        condition: service_healthy
+    networks:
+      - lottery-network
+      - shared-backend
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sS -o /dev/null http://127.0.0.1:8080/error || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  lottery-crawler:
+    image: ${LOTTERY_CRAWLER_IMAGE:?Set LOTTERY_CRAWLER_IMAGE in .env.production}
+    container_name: lottery-crawler
+    restart: unless-stopped
+    environment:
+      TZ: ${LOTTERY_TIME_ZONE:-Asia/Shanghai}
+    expose:
+      - "8000"
+    networks:
+      - lottery-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+networks:
+  lottery-network:
+  shared-backend:
+    external: true
+    name: ${LOTTERY_SHARED_DOCKER_NETWORK:-shared-backend}
+  public-gateway:
+    external: true
+    name: ${PUBLIC_GATEWAY_DOCKER_NETWORK:-public-gateway}

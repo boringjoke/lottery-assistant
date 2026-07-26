@@ -1,0 +1,16 @@
+services:
+  gateway-nginx:
+    image: nginx:stable-alpine
+    container_name: gateway-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+    networks:
+      - public-gateway
+
+networks:
+  public-gateway:
+    external: true
+    name: public-gateway

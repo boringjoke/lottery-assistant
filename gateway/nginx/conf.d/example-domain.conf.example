@@ -1,0 +1,15 @@
+server {
+    listen 80;
+    server_name app.example.com;
+
+    # 有域名的项目按 server_name 单独转发。
+    # 对应项目 frontend 容器也需要加入 public-gateway 网络。
+    location / {
+        proxy_pass http://example-frontend:80;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
