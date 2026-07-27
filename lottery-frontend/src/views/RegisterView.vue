@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import starIconUrl from '@/assets/icons/star.svg'
-import tipIconUrl from '@/assets/icons/tip.svg'
-import { loginWithPassword } from '@/api/auth'
+import { registerAccount } from '@/api/auth'
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getErrorMessage } from '@/utils/lotteryFormat'
@@ -9,8 +8,11 @@ import { getErrorMessage } from '@/utils/lotteryFormat'
 const route = useRoute()
 const router = useRouter()
 const username = ref('')
+const nickname = ref('')
 const password = ref('')
+const confirmPassword = ref('')
 const showPassword = ref(false)
+const showConfirmPassword = ref(false)
 const submitting = ref(false)
 const errorMessage = ref('')
 
@@ -18,20 +20,42 @@ const returnTarget = computed(() => {
   const redirect = route.query.redirect
   return typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/?tab=overview'
 })
+const passwordMismatch = computed(() => {
+  return Boolean(confirmPassword.value) && password.value !== confirmPassword.value
+})
 
-function goRegister() {
+function goLogin() {
   void router.push({
-    path: '/register',
+    path: '/login',
     query: { redirect: returnTarget.value },
   })
 }
 
 /**
- * 调用账号密码登录接口；Cookie 由后端写入，前端只负责跳转和错误展示。
+ * 调用注册接口；注册成功后 Cookie 由后端写入，前端跳回目标页面。
  */
-async function submitLogin() {
-  if (!username.value.trim() || !password.value.trim()) {
-    errorMessage.value = '账号和密码不能为空'
+async function submitRegister() {
+  const trimmedUsername = username.value.trim()
+  const trimmedNickname = nickname.value.trim()
+
+  if (!trimmedUsername || !trimmedNickname || !password.value || !confirmPassword.value) {
+    errorMessage.value = '用户名、昵称和密码不能为空'
+    return
+  }
+  if (!/^[A-Za-z0-9_]{4,32}$/.test(trimmedUsername)) {
+    errorMessage.value = '用户名需为 4-32 位字母、数字或下划线'
+    return
+  }
+  if (trimmedNickname.length > 64) {
+    errorMessage.value = '昵称不能超过 64 个字符'
+    return
+  }
+  if (password.value.length < 8 || password.value.length > 64) {
+    errorMessage.value = '密码长度需为 8-64 位'
+    return
+  }
+  if (password.value !== confirmPassword.value) {
+    errorMessage.value = '两次输入的密码不一致'
     return
   }
 
@@ -39,13 +63,15 @@ async function submitLogin() {
   errorMessage.value = ''
 
   try {
-    await loginWithPassword({
-      account: username.value.trim(),
+    await registerAccount({
+      username: trimmedUsername,
+      nickname: trimmedNickname,
       password: password.value,
+      confirmPassword: confirmPassword.value,
     })
     await router.push(returnTarget.value)
   } catch (err) {
-    errorMessage.value = getErrorMessage(err, '登录失败，请检查账号和密码')
+    errorMessage.value = getErrorMessage(err, '注册失败，请稍后重试')
   } finally {
     submitting.value = false
   }
@@ -53,43 +79,43 @@ async function submitLogin() {
 </script>
 
 <template>
-  <div class="login-page">
-    <header class="login-topbar">
+  <div class="register-page">
+    <header class="register-topbar">
       <button class="back-button" type="button" @click="router.push('/?tab=overview')">
         <span class="back-button__icon" aria-hidden="true"></span>
         返回彩票助手
       </button>
     </header>
 
-    <main class="login-main">
-      <section class="login-card" aria-labelledby="loginTitle">
-        <div class="login-card__glow"></div>
+    <main class="register-main">
+      <section class="register-card" aria-labelledby="registerTitle">
+        <div class="register-card__glow"></div>
 
-        <div class="login-brand">
-          <div class="login-brand__mark">≋</div>
+        <div class="register-brand">
+          <div class="register-brand__mark">≋</div>
           <span>彩票助手</span>
         </div>
 
-        <div class="login-heading">
-          <h1 id="loginTitle">欢迎回来</h1>
-          <p>请输入账号和密码完成登录</p>
+        <div class="register-heading">
+          <h1 id="registerTitle">创建账号</h1>
+          <p>注册后可收藏号码并追踪中奖历史</p>
         </div>
 
-        <form class="login-form" @submit.prevent="submitLogin">
+        <form class="register-form" @submit.prevent="submitRegister">
           <div class="form-field">
-            <label for="username">用户名</label>
+            <label for="registerUsername">用户名</label>
             <div class="input-field">
               <input
-                id="username"
+                id="registerUsername"
                 v-model="username"
                 autocomplete="username"
-                placeholder="请输入用户名"
+                maxlength="32"
+                placeholder="4-32 位字母、数字或下划线"
                 type="text"
               />
               <button
                 v-if="username"
                 class="input-clear-button"
-                data-testid="clear-username"
                 type="button"
                 aria-label="清除用户名"
                 @click="username = ''"
@@ -100,19 +126,41 @@ async function submitLogin() {
           </div>
 
           <div class="form-field">
-            <label for="password">密码</label>
+            <label for="registerNickname">昵称</label>
+            <div class="input-field">
+              <input
+                id="registerNickname"
+                v-model="nickname"
+                autocomplete="nickname"
+                maxlength="64"
+                placeholder="请输入昵称"
+                type="text"
+              />
+              <button
+                v-if="nickname"
+                class="input-clear-button"
+                type="button"
+                aria-label="清除昵称"
+                @click="nickname = ''"
+              >
+                <span aria-hidden="true"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-field">
+            <label for="registerPassword">密码</label>
             <div class="input-field password-field">
               <input
-                id="password"
+                id="registerPassword"
                 v-model="password"
                 :type="showPassword ? 'text' : 'password'"
-                autocomplete="current-password"
-                placeholder="请输入密码"
+                autocomplete="new-password"
+                placeholder="8-64 位密码"
               />
               <button
                 v-if="password"
                 class="input-clear-button input-clear-button--password"
-                data-testid="clear-password"
                 type="button"
                 aria-label="清除密码"
                 @click="password = ''"
@@ -130,38 +178,61 @@ async function submitLogin() {
             </div>
           </div>
 
-          <div v-if="errorMessage" class="login-error" role="alert">{{ errorMessage }}</div>
+          <div class="form-field">
+            <label for="registerConfirmPassword">确认密码</label>
+            <div class="input-field password-field">
+              <input
+                id="registerConfirmPassword"
+                v-model="confirmPassword"
+                :type="showConfirmPassword ? 'text' : 'password'"
+                autocomplete="new-password"
+                placeholder="请再次输入密码"
+              />
+              <button
+                v-if="confirmPassword"
+                class="input-clear-button input-clear-button--password"
+                type="button"
+                aria-label="清除确认密码"
+                @click="confirmPassword = ''"
+              >
+                <span aria-hidden="true"></span>
+              </button>
+              <button
+                class="password-toggle"
+                type="button"
+                :aria-label="showConfirmPassword ? '隐藏密码' : '显示密码'"
+                @click="showConfirmPassword = !showConfirmPassword"
+              >
+                <span class="password-toggle__icon" :class="{ visible: showConfirmPassword }" aria-hidden="true"></span>
+              </button>
+            </div>
+            <p v-if="passwordMismatch" class="form-field__hint form-field__hint--error">两次输入的密码不一致</p>
+          </div>
 
-          <button class="login-submit" type="submit" :disabled="submitting">
-            {{ submitting ? '登录中' : '登录' }}
+          <div v-if="errorMessage" class="register-error" role="alert">{{ errorMessage }}</div>
+
+          <button class="register-submit" type="submit" :disabled="submitting">
+            {{ submitting ? '注册中' : '注册并登录' }}
           </button>
 
-          <div class="login-links">
-            <button type="button" @click="goRegister">注册账号</button>
-            <button type="button">忘记密码？</button>
+          <div class="register-links">
+            <button type="button" @click="goLogin">已有账号？去登录</button>
           </div>
         </form>
       </section>
 
-      <p class="login-note login-note--primary">
-        <span class="login-note__icon" aria-hidden="true">
-          <img class="login-note__svg" :src="starIconUrl" alt="" />
+      <p class="register-note">
+        <span class="register-note__icon" aria-hidden="true">
+          <img class="register-note__svg" :src="starIconUrl" alt="" />
         </span>
-        <span>登录后可收藏号码并查看开奖历史</span>
-      </p>
-
-      <p class="login-note">
-        <span class="login-note__icon" aria-hidden="true">
-          <img class="login-note__svg" :src="tipIconUrl" alt="" />
-        </span>
-        <span>游客无需登录也可以使用开奖查询和号码分析功能</span>
+        <span>昵称之后可在个人中心修改</span>
       </p>
     </main>
   </div>
 </template>
 
 <style scoped>
-.login-page {
+.register-page {
   min-height: 100vh;
   background:
     linear-gradient(135deg, rgb(239 246 255 / 0.94), rgb(248 250 252 / 0.98)),
@@ -169,7 +240,7 @@ async function submitLogin() {
   color: #0f172a;
 }
 
-.login-topbar {
+.register-topbar {
   position: fixed;
   top: 0;
   left: 0;
@@ -202,7 +273,7 @@ async function submitLogin() {
   transform: rotate(45deg);
 }
 
-.login-main {
+.register-main {
   display: flex;
   min-height: 100vh;
   flex-direction: column;
@@ -211,18 +282,18 @@ async function submitLogin() {
   padding: 88px 20px 40px;
 }
 
-.login-card {
+.register-card {
   position: relative;
   width: min(100%, 430px);
   overflow: hidden;
   border: 1px solid #e2e8f0;
   border-radius: 18px;
   background: #ffffff;
-  padding: 38px;
+  padding: 34px 38px;
   box-shadow: 0 24px 70px rgb(15 23 42 / 0.11);
 }
 
-.login-card__glow {
+.register-card__glow {
   position: absolute;
   top: 0;
   right: 0;
@@ -233,32 +304,26 @@ async function submitLogin() {
   pointer-events: none;
 }
 
-.login-brand,
-.login-heading,
-.login-form,
-.login-note {
+.register-brand,
+.register-heading,
+.register-form,
+.register-note {
   position: relative;
   z-index: 1;
 }
 
-.login-note--primary {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: #1d4ed8;
-}
-
-.login-brand {
+.register-brand {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  margin-bottom: 26px;
+  margin-bottom: 22px;
   color: #1d4ed8;
   font-size: 21px;
   font-weight: 900;
 }
 
-.login-brand__mark {
+.register-brand__mark {
   display: inline-flex;
   width: 32px;
   height: 32px;
@@ -270,27 +335,26 @@ async function submitLogin() {
   box-shadow: 0 8px 20px rgb(37 99 235 / 0.22);
 }
 
-.login-heading {
-  margin-bottom: 28px;
+.register-heading {
+  margin-bottom: 24px;
   text-align: center;
 }
 
-.login-heading h1 {
+.register-heading h1 {
   margin: 0;
   font-size: 26px;
   font-weight: 900;
 }
 
-.login-heading p,
-.login-note p {
+.register-heading p {
   margin: 8px 0 0;
   color: #64748b;
   font-size: 14px;
 }
 
-.login-form {
+.register-form {
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 
 .form-field {
@@ -302,6 +366,16 @@ async function submitLogin() {
   color: #334155;
   font-size: 14px;
   font-weight: 800;
+}
+
+.form-field__hint {
+  margin: -2px 0 0;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.form-field__hint--error {
+  color: #b91c1c;
 }
 
 .form-field input {
@@ -333,13 +407,11 @@ async function submitLogin() {
   padding-right: 84px;
 }
 
-.input-clear-button {
+.input-clear-button,
+.password-toggle {
   position: absolute;
   top: 50%;
-  right: 8px;
   display: inline-flex;
-  width: 30px;
-  height: 30px;
   align-items: center;
   justify-content: center;
   border: 0;
@@ -350,7 +422,14 @@ async function submitLogin() {
   transform: translateY(-50%);
 }
 
-.input-clear-button:hover {
+.input-clear-button {
+  right: 8px;
+  width: 30px;
+  height: 30px;
+}
+
+.input-clear-button:hover,
+.password-toggle:hover {
   background: #f1f5f9;
   color: #475569;
 }
@@ -389,25 +468,9 @@ async function submitLogin() {
 }
 
 .password-toggle {
-  position: absolute;
-  top: 50%;
   right: 8px;
-  display: inline-flex;
   width: 32px;
   height: 32px;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: #94a3b8;
-  cursor: pointer;
-  transform: translateY(-50%);
-}
-
-.password-toggle:hover {
-  background: #f1f5f9;
-  color: #475569;
 }
 
 .password-toggle__icon {
@@ -446,7 +509,7 @@ async function submitLogin() {
   display: none;
 }
 
-.login-submit {
+.register-submit {
   height: 44px;
   border: 0;
   border-radius: 12px;
@@ -458,16 +521,16 @@ async function submitLogin() {
   cursor: pointer;
 }
 
-.login-submit:hover {
+.register-submit:hover {
   background: #1d4ed8;
 }
 
-.login-submit:disabled {
+.register-submit:disabled {
   cursor: not-allowed;
   opacity: 0.68;
 }
 
-.login-error {
+.register-error {
   border: 1px solid #fecaca;
   border-radius: 10px;
   background: #fef2f2;
@@ -478,14 +541,13 @@ async function submitLogin() {
   line-height: 1.5;
 }
 
-.login-links {
+.register-links {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   margin-top: -2px;
 }
 
-.login-links button {
+.register-links button {
   border: 0;
   background: transparent;
   color: #2563eb;
@@ -495,26 +557,22 @@ async function submitLogin() {
   cursor: pointer;
 }
 
-.login-links button:last-child {
-  color: #94a3b8;
-}
-
-.login-links button:hover {
+.register-links button:hover {
   color: #1d4ed8;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 
-.login-submit:focus-visible,
+.register-submit:focus-visible,
 .back-button:focus-visible,
 .input-clear-button:focus-visible,
 .password-toggle:focus-visible,
-.login-links button:focus-visible {
+.register-links button:focus-visible {
   outline: 3px solid #bfdbfe;
   outline-offset: 2px;
 }
 
-.login-note {
+.register-note {
   display: flex;
   width: fit-content;
   max-width: min(100%, 430px);
@@ -535,7 +593,13 @@ async function submitLogin() {
   white-space: normal;
 }
 
-.login-note__icon {
+.register-note--primary {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.register-note__icon {
   display: inline-flex;
   width: 20px;
   height: 20px;
@@ -544,13 +608,9 @@ async function submitLogin() {
   justify-content: center;
   border-radius: 50%;
   background: #eff6ff;
-  color: #2563eb;
-  font-size: 13px;
-  font-weight: 900;
-  line-height: 1;
 }
 
-.login-note__svg {
+.register-note__svg {
   display: block;
   width: 18px;
   height: 18px;
@@ -558,11 +618,11 @@ async function submitLogin() {
 }
 
 @media (max-width: 560px) {
-  .login-card {
+  .register-card {
     padding: 30px 22px;
   }
 
-  .login-topbar {
+  .register-topbar {
     padding: 18px;
   }
 }

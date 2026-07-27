@@ -1,11 +1,18 @@
 import { get, post } from '@/api/http'
-import type { AuthSession, CurrentUser, PasswordLoginRequest } from '@/types/auth'
+import type { AuthSession, CurrentUser, PasswordLoginRequest, RegisterRequest } from '@/types/auth'
 
 /**
  * 使用用户名、手机号或邮箱加密码登录；Web 端会由后端写入 HttpOnly Cookie。
  */
 export function loginWithPassword(requestBody: PasswordLoginRequest): Promise<AuthSession> {
   return post<AuthSession>('/api/auth/login', requestBody)
+}
+
+/**
+ * 注册普通用户账号；注册成功后后端会自动写入 HttpOnly Cookie。
+ */
+export function registerAccount(requestBody: RegisterRequest): Promise<AuthSession> {
+  return post<AuthSession>('/api/auth/register', requestBody)
 }
 
 /**
