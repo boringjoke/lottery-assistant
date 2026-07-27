@@ -8,6 +8,7 @@ import com.hotchpotch.lottery.user.record.AuthSession;
 import com.hotchpotch.lottery.user.record.CurrentUserResponse;
 import com.hotchpotch.lottery.user.record.LoginResponse;
 import com.hotchpotch.lottery.user.record.PasswordLoginRequest;
+import com.hotchpotch.lottery.user.record.RegisterRequest;
 import com.hotchpotch.lottery.user.service.AuthSessionService;
 import com.hotchpotch.lottery.user.service.UserAuthService;
 import jakarta.servlet.http.Cookie;
@@ -52,6 +53,18 @@ public class AuthController {
     @PostMapping("/login")
     public ApiResponse<AuthSession> login(@RequestBody PasswordLoginRequest request, HttpServletResponse response) {
         LoginResponse loginResponse = userAuthService.loginWithPassword(request);
+        AuthSession session = authSessionService.createSession(loginResponse);
+        addAuthCookie(response, session.token(), Duration.ofSeconds(authProperties.sessionTtlSeconds()));
+
+        return ApiResponse.success(session);
+    }
+
+    /**
+     * 注册普通用户账号，注册成功后自动创建登录会话。
+     */
+    @PostMapping("/register")
+    public ApiResponse<AuthSession> register(@RequestBody RegisterRequest request, HttpServletResponse response) {
+        LoginResponse loginResponse = userAuthService.register(request);
         AuthSession session = authSessionService.createSession(loginResponse);
         addAuthCookie(response, session.token(), Duration.ofSeconds(authProperties.sessionTtlSeconds()));
 
